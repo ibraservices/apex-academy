@@ -7,7 +7,8 @@ import {
   LayoutDashboard, 
   Sparkles,
   RefreshCw,
-  Wallet
+  Wallet,
+  LogOut
 } from 'lucide-react';
 import { 
   type Lesson, 
@@ -16,6 +17,7 @@ import {
   type Student, 
   type Enrollment,
   type Expense,
+  type Profile,
   getLessons,
   saveLesson,
   deleteLesson,
@@ -34,7 +36,10 @@ import {
   getExpenses,
   saveExpense,
   deleteExpense,
-  isSupabaseConfigured
+  getCurrentProfile,
+  isSupabaseConfigured,
+  supabase,
+  mockLogout
 } from './lib/db';
 import { Dashboard } from './components/Dashboard';
 import { LessonsManager } from './components/LessonsManager';
@@ -42,12 +47,16 @@ import { TeachersManager } from './components/TeachersManager';
 import { GroupsManager } from './components/GroupsManager';
 import { StudentsManager } from './components/StudentsManager';
 import { ExpensesManager } from './components/ExpensesManager';
+import { AuthManager } from './components/AuthManager';
+import { SuperAdminPanel } from './components/SuperAdminPanel';
 
 export default function App() {
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [authLoading, setAuthLoading] = useState<boolean>(true);
   const [view, setView] = useState<string>('dashboard');
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(false);
 
-  // الكيانات البرمجية (Entities State)
+  // الكيانات البرمجية لمدير الجمعية
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
@@ -55,7 +64,7 @@ export default function App() {
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
 
-  // تحميل البيانات عند بدء التشغيل
+  // تحميل البيانات الخاصة بالجمعية المسجل عليها المستخدم الحالي
   const loadAllData = async () => {
     try {
       setLoading(true);
@@ -82,13 +91,59 @@ export default function App() {
     }
   };
 
+  const checkAuth = async () => {
+    try {
+      setAuthLoading(true);
+      const userProfile = await getCurrentProfile();
+      setProfile(userProfile);
+      if (userProfile && userProfile.role === 'association_admin') {
+        await loadAllData();
+      }
+    } catch (err: any) {
+      console.error('فحص الجلسة فشل:', err);
+      alert(err.message || 'حدث خطأ أثناء التحقق من الجلسة.');
+      setProfile(null);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
   useEffect(() => {
-    loadAllData();
+    checkAuth();
+
+    if (isSupabaseConfigured && supabase) {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event) => {
+        if (event === 'SIGNED_IN') {
+          await checkAuth();
+        } else if (event === 'SIGNED_OUT') {
+          setProfile(null);
+          setAuthLoading(false);
+        }
+      });
+      return () => subscription.unsubscribe();
+    }
   }, []);
 
-  // دالات التحديث (CRUD Actions Wrapper)
+  const handleLogout = () => {
+    setProfile(null);
+    setView('dashboard');
+  };
+
+  const handleLogoutClick = async () => {
+    if (isSupabaseConfigured && supabase) {
+      await supabase.auth.signOut();
+    } else {
+      mockLogout();
+    }
+    handleLogout();
+  };
+
+  // دالات التحديث مع تمرير معرف الجمعية تلقائياً
   const handleSaveLesson = async (lessonData: Omit<Lesson, 'id'> & { id?: string }) => {
-    await saveLesson(lessonData);
+    await saveLesson({
+      ...lessonData,
+      association_id: profile?.association_id || undefined
+    });
     await loadAllData();
   };
 
@@ -98,7 +153,10 @@ export default function App() {
   };
 
   const handleSaveTeacher = async (teacherData: Omit<Teacher, 'id'> & { id?: string }) => {
-    await saveTeacher(teacherData);
+    await saveTeacher({
+      ...teacherData,
+      association_id: profile?.association_id || undefined
+    });
     await loadAllData();
   };
 
@@ -108,7 +166,10 @@ export default function App() {
   };
 
   const handleSaveGroup = async (groupData: Omit<Group, 'id'> & { id?: string }) => {
-    await saveGroup(groupData);
+    await saveGroup({
+      ...groupData,
+      association_id: profile?.association_id || undefined
+    });
     await loadAllData();
   };
 
@@ -118,7 +179,10 @@ export default function App() {
   };
 
   const handleSaveStudent = async (studentData: Omit<Student, 'id'> & { id?: string }) => {
-    const saved = await saveStudent(studentData);
+    const saved = await saveStudent({
+      ...studentData,
+      association_id: profile?.association_id || undefined
+    });
     await loadAllData();
     return saved;
   };
@@ -129,7 +193,10 @@ export default function App() {
   };
 
   const handleSaveEnrollment = async (enrollmentData: Omit<Enrollment, 'id'> & { id?: string }) => {
-    await saveEnrollment(enrollmentData);
+    await saveEnrollment({
+      ...enrollmentData,
+      association_id: profile?.association_id || undefined
+    });
     await loadAllData();
   };
 
@@ -139,7 +206,10 @@ export default function App() {
   };
 
   const handleSaveExpense = async (expenseData: Omit<Expense, 'id'> & { id?: string }) => {
-    await saveExpense(expenseData);
+    await saveExpense({
+      ...expenseData,
+      association_id: profile?.association_id || undefined
+    });
     await loadAllData();
   };
 
@@ -148,19 +218,13 @@ export default function App() {
     await loadAllData();
   };
 
-  // تبديل العرض بين المكونات
+  // تبديل العرض بين المكونات لمدير الجمعية
   const renderMainContent = () => {
     if (loading) {
       return (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: '16px' }}>
           <RefreshCw size={44} className="spin-animation" style={{ color: 'var(--primary-green)', animation: 'spin 1.5s linear infinite' }} />
           <p style={{ fontWeight: 'bold', color: 'var(--text-muted)' }}>جاري تحميل البيانات وتحديث الحسابات...</p>
-          <style>{`
-            @keyframes spin {
-              0% { transform: rotate(0deg); }
-              100% { transform: rotate(360deg); }
-            }
-          `}</style>
         </div>
       );
     }
@@ -238,6 +302,33 @@ export default function App() {
     }
   };
 
+  // شاشة الانتظار للتحقق من الجلسة
+  if (authLoading) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', gap: '16px', backgroundColor: '#f4f8f7' }}>
+        <RefreshCw size={50} className="spin-animation" style={{ color: '#0d9488', animation: 'spin 1.2s linear infinite' }} />
+        <p style={{ fontWeight: 'bold', color: '#64748b', fontFamily: 'Cairo, sans-serif' }}>جاري التحقق من الصلاحيات والاتصال الآمن...</p>
+        <style>{`
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        `}</style>
+      </div>
+    );
+  }
+
+  // إذا لم يسجل المستخدم دخوله، أظهر شاشة الدخول الموحدة
+  if (!profile) {
+    return <AuthManager onLoginSuccess={(p) => setProfile(p)} />;
+  }
+
+  // إذا كان المستخدم مطور (Super Admin)، أظهر لوحة تحكم الجمعيات
+  if (profile.role === 'super_admin') {
+    return <SuperAdminPanel currentProfile={profile} onLogout={handleLogout} />;
+  }
+
+  // إذا كان مستخدم جمعية عادي (Association Admin)، أظهر واجهة الإدارة العادية
   return (
     <div className="app-container">
       {/* الشريط الجانبي (Sidebar) */}
@@ -247,8 +338,8 @@ export default function App() {
             <Sparkles size={24} />
           </div>
           <div className="sidebar-logo-text">
-            <h1>جمعية الهداية</h1>
-            <p>لتحفيظ القرآن والدروس</p>
+            <h1>{profile.association?.name || 'جمعية القرآن'}</h1>
+            <p>لوحة إدارة الجمعية</p>
           </div>
         </div>
 
@@ -308,13 +399,25 @@ export default function App() {
                 <span>النفقات والمالية</span>
               </button>
             </li>
+            
+            {/* زر تسجيل الخروج لمدير الجمعية */}
+            <li style={{ marginTop: 'auto', paddingTop: '16px', borderTop: '1px solid var(--border-color)' }}>
+              <button 
+                className="sidebar-item-btn"
+                onClick={handleLogoutClick}
+                style={{ color: 'var(--color-danger)' }}
+              >
+                <LogOut size={20} />
+                <span>تسجيل الخروج</span>
+              </button>
+            </li>
           </ul>
         </nav>
 
         <div className="sidebar-footer">
-          <p>نظام الإدارة التعليمية © 2026</p>
-          <p style={{ fontSize: '0.65rem', color: 'var(--primary-blue)', fontWeight: 'bold', marginTop: '4px' }}>
-            {isSupabaseConfigured ? 'متصل بقاعدة Supabase' : 'قاعدة تخزين محلية نشطة'}
+          <p style={{ fontWeight: 'bold', color: 'var(--primary-green)' }}>{profile.name}</p>
+          <p style={{ fontSize: '0.65rem', color: 'var(--text-light)', marginTop: '2px' }}>
+            {isSupabaseConfigured ? 'متصل بقاعدة Supabase' : 'تخزين محلي نشط'}
           </p>
         </div>
       </aside>

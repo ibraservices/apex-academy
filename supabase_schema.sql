@@ -1,40 +1,71 @@
 -- ==========================================================
--- Supabase Schema for Quran and General Lessons Management
--- مخطط قاعدة البيانات لجمعية تحفيظ القرآن والدروس
+-- Supabase Schema for Multi-Tenant SaaS Quran Management Platform
+-- مخطط قاعدة البيانات لمنصة تحفيظ القرآن متعددة الجمعيات
 -- ==========================================================
 
--- 1. جدول الدروس (lessons)
-CREATE TABLE IF NOT EXISTS public.lessons (
+-- 1. تنظيف الجداول القديمة لضمان بنية نظيفة ومعزولة
+DROP TABLE IF EXISTS public.enrollments CASCADE;
+DROP TABLE IF EXISTS public.expenses CASCADE;
+DROP TABLE IF EXISTS public.groups CASCADE;
+DROP TABLE IF EXISTS public.students CASCADE;
+DROP TABLE IF EXISTS public.teachers CASCADE;
+DROP TABLE IF EXISTS public.lessons CASCADE;
+DROP TABLE IF EXISTS public.profiles CASCADE;
+DROP TABLE IF EXISTS public.associations CASCADE;
+
+-- 2. جدول الجمعيات (associations)
+CREATE TABLE public.associations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
-    description TEXT,
+    status TEXT DEFAULT 'active' CHECK (status IN ('active', 'suspended')),
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 2. جدول المدرسين (teachers)
-CREATE TABLE IF NOT EXISTS public.teachers (
+-- 3. جدول ملفات المستخدمين (profiles) المرتبط بـ auth.users
+CREATE TABLE public.profiles (
+    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    email TEXT NOT NULL,
+    name TEXT NOT NULL,
+    role TEXT NOT NULL CHECK (role IN ('super_admin', 'association_admin')),
+    association_id UUID REFERENCES public.associations(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 4. جدول الدروس (lessons)
+CREATE TABLE public.lessons (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    description TEXT,
+    association_id UUID REFERENCES public.associations(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 5. جدول المدرسين (teachers)
+CREATE TABLE public.teachers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
     gender TEXT NOT NULL CHECK (gender IN ('male', 'female')),
     salary_type TEXT NOT NULL CHECK (salary_type IN ('fixed', 'ratio')),
     salary_value NUMERIC NOT NULL DEFAULT 0,
     phone TEXT,
+    association_id UUID REFERENCES public.associations(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 3. جدول المجموعات (groups)
-CREATE TABLE IF NOT EXISTS public.groups (
+-- 6. جدول المجموعات (groups)
+CREATE TABLE public.groups (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
     teacher_id UUID REFERENCES public.teachers(id) ON DELETE CASCADE,
     lesson_id UUID REFERENCES public.lessons(id) ON DELETE CASCADE,
     schedule TEXT,
     gender_target TEXT NOT NULL CHECK (gender_target IN ('male', 'female', 'all')),
+    association_id UUID REFERENCES public.associations(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 4. جدول الطلاب (students)
-CREATE TABLE IF NOT EXISTS public.students (
+-- 7. جدول الطلاب (students)
+CREATE TABLE public.students (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
     age INTEGER CHECK (age >= 0),
@@ -42,11 +73,12 @@ CREATE TABLE IF NOT EXISTS public.students (
     gender TEXT NOT NULL CHECK (gender IN ('male', 'female')),
     parent_name TEXT,
     parent_phone TEXT,
+    association_id UUID REFERENCES public.associations(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 5. جدول التسجيلات والاشتراكات (enrollments)
-CREATE TABLE IF NOT EXISTS public.enrollments (
+-- 8. جدول التسجيلات والاشتراكات (enrollments)
+CREATE TABLE public.enrollments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     student_id UUID REFERENCES public.students(id) ON DELETE CASCADE,
     group_id UUID REFERENCES public.groups(id) ON DELETE CASCADE,
@@ -54,30 +86,314 @@ CREATE TABLE IF NOT EXISTS public.enrollments (
     price NUMERIC NOT NULL DEFAULT 0,
     start_date DATE NOT NULL DEFAULT CURRENT_DATE,
     end_date DATE NOT NULL,
+    payment_status TEXT NOT NULL DEFAULT 'unpaid' CHECK (payment_status IN ('paid', 'partial', 'unpaid')),
+    paid_amount NUMERIC NOT NULL DEFAULT 0,
+    association_id UUID REFERENCES public.associations(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- تمكين سياسات الحماية (Row Level Security) - اختياري للتجربة العامة
--- لتبسيط التطوير الأولي، يمكن السماح بالوصول العام أو ضبط السياسات كالتالي:
+-- 9. جدول النفقات والمالية (expenses)
+CREATE TABLE public.expenses (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    title TEXT NOT NULL,
+    amount NUMERIC NOT NULL DEFAULT 0,
+    date DATE NOT NULL DEFAULT CURRENT_DATE,
+    category TEXT NOT NULL CHECK (category IN ('rent', 'bills', 'salaries', 'supplies', 'other')),
+    description TEXT,
+    association_id UUID REFERENCES public.associations(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
 
+-- ==========================================================
+-- سياسات الحماية ونظام تصفية البيانات (RLS Policies)
+-- ==========================================================
+
+-- تفعيل الـ RLS على كافة الجداول
+ALTER TABLE public.associations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.lessons ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.teachers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.groups ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.enrollments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.expenses ENABLE ROW LEVEL SECURITY;
 
--- سياسات وصول عامة (مفتوحة مؤقتاً للتجربة)
-CREATE POLICY "Allow public read access on lessons" ON public.lessons FOR SELECT USING (true);
-CREATE POLICY "Allow public write access on lessons" ON public.lessons FOR ALL USING (true) WITH CHECK (true);
+-- دوال أمان لجلب معرف الجلسة الحالية ودور المستخدم
+CREATE OR REPLACE FUNCTION public.get_user_association_id()
+RETURNS UUID AS $$
+  SELECT association_id FROM public.profiles WHERE id = auth.uid();
+$$ LANGUAGE sql SECURITY DEFINER;
 
-CREATE POLICY "Allow public read access on teachers" ON public.teachers FOR SELECT USING (true);
-CREATE POLICY "Allow public write access on teachers" ON public.teachers FOR ALL USING (true) WITH CHECK (true);
+CREATE OR REPLACE FUNCTION public.get_user_role()
+RETURNS TEXT AS $$
+  SELECT role FROM public.profiles WHERE id = auth.uid();
+$$ LANGUAGE sql SECURITY DEFINER;
 
-CREATE POLICY "Allow public read access on groups" ON public.groups FOR SELECT USING (true);
-CREATE POLICY "Allow public write access on groups" ON public.groups FOR ALL USING (true) WITH CHECK (true);
+-- سياسات جدول الجمعيات (associations)
+CREATE POLICY "super_admin_all_associations" ON public.associations 
+  FOR ALL USING (public.get_user_role() = 'super_admin');
 
-CREATE POLICY "Allow public read access on students" ON public.students FOR SELECT USING (true);
-CREATE POLICY "Allow public write access on students" ON public.students FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "association_admin_select_own_association" ON public.associations 
+  FOR SELECT USING (public.get_user_role() = 'association_admin' AND id = public.get_user_association_id());
 
-CREATE POLICY "Allow public read access on enrollments" ON public.enrollments FOR SELECT USING (true);
-CREATE POLICY "Allow public write access on enrollments" ON public.enrollments FOR ALL USING (true) WITH CHECK (true);
+-- سياسات جدول ملفات التعريف (profiles)
+CREATE POLICY "super_admin_all_profiles" ON public.profiles 
+  FOR ALL USING (public.get_user_role() = 'super_admin');
+
+CREATE POLICY "users_select_own_profile" ON public.profiles 
+  FOR SELECT USING (id = auth.uid());
+
+CREATE POLICY "users_update_own_profile" ON public.profiles
+  FOR UPDATE USING (id = auth.uid()) WITH CHECK (id = auth.uid());
+
+-- سياسات الجداول التشغيلية (معزولة لكل جمعية ومفتوحة للمطور)
+-- الدروس
+CREATE POLICY "lessons_super_admin" ON public.lessons FOR ALL USING (public.get_user_role() = 'super_admin');
+CREATE POLICY "lessons_association_admin" ON public.lessons FOR ALL 
+  USING (public.get_user_role() = 'association_admin' AND association_id = public.get_user_association_id())
+  WITH CHECK (public.get_user_role() = 'association_admin' AND association_id = public.get_user_association_id());
+
+-- المدرسين
+CREATE POLICY "teachers_super_admin" ON public.teachers FOR ALL USING (public.get_user_role() = 'super_admin');
+CREATE POLICY "teachers_association_admin" ON public.teachers FOR ALL 
+  USING (public.get_user_role() = 'association_admin' AND association_id = public.get_user_association_id())
+  WITH CHECK (public.get_user_role() = 'association_admin' AND association_id = public.get_user_association_id());
+
+-- المجموعات
+CREATE POLICY "groups_super_admin" ON public.groups FOR ALL USING (public.get_user_role() = 'super_admin');
+CREATE POLICY "groups_association_admin" ON public.groups FOR ALL 
+  USING (public.get_user_role() = 'association_admin' AND association_id = public.get_user_association_id())
+  WITH CHECK (public.get_user_role() = 'association_admin' AND association_id = public.get_user_association_id());
+
+-- الطلاب
+CREATE POLICY "students_super_admin" ON public.students FOR ALL USING (public.get_user_role() = 'super_admin');
+CREATE POLICY "students_association_admin" ON public.students FOR ALL 
+  USING (public.get_user_role() = 'association_admin' AND association_id = public.get_user_association_id())
+  WITH CHECK (public.get_user_role() = 'association_admin' AND association_id = public.get_user_association_id());
+
+-- التسجيلات
+CREATE POLICY "enrollments_super_admin" ON public.enrollments FOR ALL USING (public.get_user_role() = 'super_admin');
+CREATE POLICY "enrollments_association_admin" ON public.enrollments FOR ALL 
+  USING (public.get_user_role() = 'association_admin' AND association_id = public.get_user_association_id())
+  WITH CHECK (public.get_user_role() = 'association_admin' AND association_id = public.get_user_association_id());
+
+-- النفقات
+CREATE POLICY "expenses_super_admin" ON public.expenses FOR ALL USING (public.get_user_role() = 'super_admin');
+CREATE POLICY "expenses_association_admin" ON public.expenses FOR ALL 
+  USING (public.get_user_role() = 'association_admin' AND association_id = public.get_user_association_id())
+  WITH CHECK (public.get_user_role() = 'association_admin' AND association_id = public.get_user_association_id());
+
+
+-- ==========================================================
+-- دوال الإدارة والتحكم (Administrative Functions & Triggers)
+-- ==========================================================
+
+-- دالة معالجة إضافة مستخدم جديد وتعبئة بروفايله تلقائياً
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.profiles WHERE id = new.id) THEN
+    INSERT INTO public.profiles (id, email, name, role, association_id)
+    VALUES (
+      new.id,
+      new.email,
+      COALESCE(new.raw_user_meta_data->>'name', 'مسؤول جمعية'),
+      CASE WHEN new.email = 'admin@alhidaya.com' THEN 'super_admin' ELSE 'association_admin' END,
+      NULL
+    );
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ربط دالة التهيئة بجدول مستخدمي النظام
+CREATE OR REPLACE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- دالة خاصة بالمطور لإنشاء حسابات مدراء الجمعيات بشكل آمن ومباشر
+CREATE OR REPLACE FUNCTION public.admin_create_user(
+    p_email TEXT,
+    p_password TEXT,
+    p_name TEXT,
+    p_association_id UUID
+)
+RETURNS UUID
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_user_id UUID;
+    v_encrypted_password TEXT;
+BEGIN
+    -- التحقق من صلاحيات المنشئ (يجب أن يكون مطور/Super Admin)
+    IF NOT EXISTS (
+        SELECT 1 FROM public.profiles 
+        WHERE id = auth.uid() AND role = 'super_admin'
+    ) THEN
+        RAISE EXCEPTION 'غير مصرح لك بإنشاء مستخدمين. صلاحية المطور فقط مطلوبة.';
+    END IF;
+
+    -- تشفير كلمة المرور باستخدام إضافة pgcrypto التابعة لـ Supabase
+    v_encrypted_password := crypt(p_password, gen_salt('bf'));
+
+    -- توليد معرف مستخدم جديد
+    v_user_id := gen_random_uuid();
+
+    -- إدخال السجل في جدول مستخدمي Supabase الأساسي
+    INSERT INTO auth.users (
+        instance_id,
+        id,
+        aud,
+        role,
+        email,
+        encrypted_password,
+        email_confirmed_at,
+        raw_app_meta_data,
+        raw_user_meta_data,
+        created_at,
+        updated_at,
+        confirmation_token,
+        email_change,
+        email_change_token_new,
+        recovery_token
+    )
+    VALUES (
+        '00000000-0000-0000-0000-000000000000',
+        v_user_id,
+        'authenticated',
+        'authenticated',
+        p_email,
+        v_encrypted_password,
+        NOW(),
+        '{"provider": "email", "providers": ["email"]}',
+        jsonb_build_object('name', p_name),
+        NOW(),
+        NOW(),
+        '',
+        '',
+        '',
+        ''
+    );
+
+    -- إدخال الهوية الافتراضية للمطابقة
+    INSERT INTO auth.identities (
+        id,
+        user_id,
+        identity_data,
+        provider,
+        created_at,
+        updated_at
+    )
+    VALUES (
+        v_user_id,
+        v_user_id,
+        jsonb_build_object('sub', v_user_id, 'email', p_email),
+        'email',
+        NOW(),
+        NOW()
+    );
+
+    -- إدخال السجل في البروفايل وربطه بالجمعية
+    INSERT INTO public.profiles (
+        id,
+        email,
+        name,
+        role,
+        association_id
+    )
+    VALUES (
+        v_user_id,
+        p_email,
+        p_name,
+        'association_admin',
+        p_association_id
+    );
+
+    RETURN v_user_id;
+END;
+$$ LANGUAGE plpgsql;
+
+-- ==========================================================
+-- تهيئة حساب المطور الأول (Super Admin Seeding)
+-- ==========================================================
+
+DO $$
+DECLARE
+    v_admin_id UUID := '00000000-0000-0000-0000-000000000001';
+    v_admin_email TEXT := 'admin@alhidaya.com';
+    v_admin_pass TEXT := 'admin123456';
+    v_encrypted_pass TEXT;
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM auth.users WHERE email = v_admin_email) THEN
+        v_encrypted_pass := crypt(v_admin_pass, gen_salt('bf'));
+
+        INSERT INTO auth.users (
+            instance_id,
+            id,
+            aud,
+            role,
+            email,
+            encrypted_password,
+            email_confirmed_at,
+            raw_app_meta_data,
+            raw_user_meta_data,
+            created_at,
+            updated_at,
+            confirmation_token,
+            email_change,
+            email_change_token_new,
+            recovery_token
+        )
+        VALUES (
+            '00000000-0000-0000-0000-000000000000',
+            v_admin_id,
+            'authenticated',
+            'authenticated',
+            v_admin_email,
+            v_encrypted_pass,
+            NOW(),
+            '{"provider": "email", "providers": ["email"]}',
+            '{"name": "المطور"}',
+            NOW(),
+            NOW(),
+            '',
+            '',
+            '',
+            ''
+        );
+
+        INSERT INTO auth.identities (
+            id,
+            user_id,
+            identity_data,
+            provider,
+            created_at,
+            updated_at
+        )
+        VALUES (
+            v_admin_id,
+            v_admin_id,
+            jsonb_build_object('sub', v_admin_id, 'email', v_admin_email),
+            'email',
+            NOW(),
+            NOW()
+        );
+        
+        -- إدخال حساب البروفايل للمطور للتأكيد
+        INSERT INTO public.profiles (
+            id,
+            email,
+            name,
+            role,
+            association_id
+        )
+        VALUES (
+            v_admin_id,
+            v_admin_email,
+            'المطور',
+            'super_admin',
+            NULL
+        ) ON CONFLICT (id) DO UPDATE SET role = 'super_admin';
+    END IF;
+END;
+$$;
