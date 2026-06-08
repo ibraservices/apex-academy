@@ -14,13 +14,15 @@ import {
   CheckCircle2,
   AlertCircle,
   Clock,
-  Edit
+  Edit,
+  Trash2
 } from 'lucide-react';
 import { 
   supabase, 
   isSupabaseConfigured, 
   getAssociations, 
   saveAssociation, 
+  deleteAssociation,
   adminCreateUser, 
   adminUpdateUser,
   mockLogout,
@@ -95,10 +97,18 @@ export function SuperAdminPanel({ currentProfile, onLogout }: SuperAdminPanelPro
 
       setSubmitting(true);
       try {
-        // 1. تحديث اسم الجمعية
+        let trialEndsAt: string | null = null;
+        if (accountType === 'trial') {
+          const end = new Date();
+          end.setDate(end.getDate() + parseInt(trialDays || '30'));
+          trialEndsAt = end.toISOString();
+        }
+
+        // 1. تحديث بيانات الجمعية والاشتراك التجريبي
         await saveAssociation({
           ...editingAssoc,
-          name: assocName.trim()
+          name: assocName.trim(),
+          trial_ends_at: trialEndsAt
         });
 
         // 2. تحديث حساب المدير
@@ -136,7 +146,7 @@ export function SuperAdminPanel({ currentProfile, onLogout }: SuperAdminPanelPro
         return;
       }
       if (managerPassword.length < 6) {
-        setErrorMsg('يجب أن تكون كلمة المرور 6 أحرف على الأقل.');
+        setErrorMsg('يجب أن تكون كلمة المرور 6 أحرف على الأعل.');
         return;
       }
 
@@ -188,6 +198,20 @@ export function SuperAdminPanel({ currentProfile, onLogout }: SuperAdminPanelPro
   const handleStartEdit = (assoc: Association) => {
     setEditingAssoc(assoc);
     setAssocName(assoc.name);
+    
+    // إدخال تفاصيل الاشتراك
+    if (assoc.trial_ends_at) {
+      setAccountType('trial');
+      const endDate = new Date(assoc.trial_ends_at);
+      const now = new Date();
+      const diffTime = endDate.getTime() - now.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      setTrialDays(diffDays > 0 ? diffDays.toString() : '30');
+    } else {
+      setAccountType('unlimited');
+      setTrialDays('30');
+    }
+
     const manager = managers.find(m => m.association_id === assoc.id);
     if (manager) {
       setManagerName(manager.name);
@@ -205,6 +229,8 @@ export function SuperAdminPanel({ currentProfile, onLogout }: SuperAdminPanelPro
     setManagerName('');
     setManagerEmail('');
     setManagerPassword('');
+    setAccountType('unlimited');
+    setTrialDays('30');
   };
 
   const handleToggleStatus = async (assoc: Association) => {
@@ -241,6 +267,11 @@ export function SuperAdminPanel({ currentProfile, onLogout }: SuperAdminPanelPro
       });
       await loadData();
       alert(`تم تمديد الفترة التجريبية لجمعية "${assoc.name}" لمدة 30 يوم بنجاح.`);
+      
+      // إذا كان المطور يقوم بتعديل نفس الجمعية حالياً، نقوم بتحديث مدة التجربة في المدخلات
+      if (editingAssoc?.id === assoc.id) {
+        setTrialDays('30');
+      }
     } catch (err) {
       console.error(err);
       alert('فشل تمديد الفترة التجريبية.');
@@ -256,6 +287,10 @@ export function SuperAdminPanel({ currentProfile, onLogout }: SuperAdminPanelPro
       });
       await loadData();
       alert(`تمت ترقية جمعية "${assoc.name}" لحساب غير محدود بنجاح.`);
+      
+      if (editingAssoc?.id === assoc.id) {
+        setAccountType('unlimited');
+      }
     } catch (err) {
       console.error(err);
       alert('فشل ترقية الحساب.');
@@ -274,9 +309,46 @@ export function SuperAdminPanel({ currentProfile, onLogout }: SuperAdminPanelPro
       });
       await loadData();
       alert(`تم تحويل حساب جمعية "${assoc.name}" إلى تجريبي (ينتهي بعد 30 يوم).`);
+      
+      if (editingAssoc?.id === assoc.id) {
+        setAccountType('trial');
+        setTrialDays('30');
+      }
     } catch (err) {
       console.error(err);
       alert('فشل تحويل الحساب.');
+    }
+  };
+
+  const handleDeleteAssociation = async (assoc: Association) => {
+    const confirmMsg = `⚠️ هل أنت متأكد تماماً من حذف جمعية "${assoc.name}" بشكل نهائي؟\n\n` +
+      `سيؤدي هذا الإجراء إلى حذف كافة بيانات الحلقات، الطلاب، المدرسين، المصاريف، والاشتراكات التابعة لها، بالإضافة إلى حذف حساب المدير المسؤول عنها تماماً.\n\n` +
+      `لا يمكن التراجع عن هذا الإجراء!`;
+
+    if (!window.confirm(confirmMsg)) return;
+
+    // تأكيد أمني بكتابة الاسم للتحقق
+    const nameInput = window.prompt(`لتأكيد الحذف النهائي، يرجى كتابة اسم الجمعية بالضبط ("${assoc.name}"):`);
+    if (nameInput !== assoc.name) {
+      alert('الاسم غير متطابق. تم إلغاء عملية الحذف.');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setErrorMsg(null);
+      setSuccessMsg(null);
+      await deleteAssociation(assoc.id);
+      setSuccessMsg(`تم حذف جمعية "${assoc.name}" وكافة بياناتها وحساباتها بنجاح.`);
+      if (editingAssoc?.id === assoc.id) {
+        handleCancelEdit();
+      }
+      await loadData();
+    } catch (err: any) {
+      console.error(err);
+      setErrorMsg(err.message || 'فشل حذف الجمعية. يرجى مراجعة إعدادات قاعدة البيانات.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -384,36 +456,33 @@ export function SuperAdminPanel({ currentProfile, onLogout }: SuperAdminPanelPro
               />
             </div>
 
-            {/* لا نعدل نوع الاشتراك من هنا بل نعدله مباشرة من الجدول لأمان وتكامل البيانات */}
-            {!editingAssoc && (
-              <>
-                <div style={styles.inputGroup}>
-                  <label style={styles.label}>نوع الاشتراك</label>
-                  <select
-                    value={accountType}
-                    onChange={(e) => setAccountType(e.target.value as 'unlimited' | 'trial')}
-                    style={styles.input}
-                  >
-                    <option value="unlimited">غير محدود (حساب مفتوح)</option>
-                    <option value="trial">تجريبي (مؤقت بالأيام)</option>
-                  </select>
-                </div>
+            <div style={styles.inputGroup}>
+              <label style={styles.label}>نوع الاشتراك</label>
+              <select
+                value={accountType}
+                onChange={(e) => setAccountType(e.target.value as 'unlimited' | 'trial')}
+                style={styles.input}
+              >
+                <option value="unlimited">غير محدود (حساب مفتوح)</option>
+                <option value="trial">تجريبي (مؤقت بالأيام)</option>
+              </select>
+            </div>
 
-                {accountType === 'trial' && (
-                  <div style={styles.inputGroup}>
-                    <label style={styles.label}>عدد أيام التجربة</label>
-                    <input
-                      type="number"
-                      min="1"
-                      placeholder="30"
-                      value={trialDays}
-                      onChange={(e) => setTrialDays(e.target.value)}
-                      style={styles.input}
-                      required
-                    />
-                  </div>
-                )}
-              </>
+            {accountType === 'trial' && (
+              <div style={styles.inputGroup}>
+                <label style={styles.label}>
+                  {editingAssoc ? 'أيام التجربة المتبقية' : 'عدد أيام التجربة'}
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  placeholder="30"
+                  value={trialDays}
+                  onChange={(e) => setTrialDays(e.target.value)}
+                  style={styles.input}
+                  required
+                />
+              </div>
             )}
 
             <div style={styles.divider}>بيانات حساب المدير (المسؤول)</div>
@@ -595,7 +664,7 @@ export function SuperAdminPanel({ currentProfile, onLogout }: SuperAdminPanelPro
                                 backgroundColor: '#f1f5f9',
                                 color: '#475569',
                               }}
-                              title="تعديل اسم الجمعية وحساب المدير"
+                              title="تعديل اسم الجمعية وحساب المدير والاشتراك"
                             >
                               <Edit size={12} />
                               <span>تعديل</span>
@@ -654,6 +723,20 @@ export function SuperAdminPanel({ currentProfile, onLogout }: SuperAdminPanelPro
                                 <span>تحويل لتجريبي</span>
                               </button>
                             )}
+
+                            {/* زر الحذف النهائي */}
+                            <button
+                              onClick={() => handleDeleteAssociation(assoc)}
+                              style={{
+                                ...styles.actionBtn,
+                                backgroundColor: '#fef2f2',
+                                color: '#dc2626',
+                              }}
+                              title="حذف الجمعية نهائياً مع كافة حساباتها وبياناتها"
+                            >
+                              <Trash2 size={12} />
+                              <span>حذف</span>
+                            </button>
                           </div>
                         </td>
                       </tr>

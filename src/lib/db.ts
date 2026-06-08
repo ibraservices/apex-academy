@@ -270,6 +270,47 @@ export async function saveAssociation(association: Omit<Association, 'id'> & { i
   }
 }
 
+export async function deleteAssociation(id: string): Promise<void> {
+  if (isSupabaseConfigured && supabase) {
+    const { error } = await supabase.rpc('admin_delete_association', {
+      p_association_id: id
+    });
+    if (error) throw error;
+  } else {
+    const associations = getLocalData<Association>('quran_associations');
+    setLocalData('quran_associations', associations.filter(a => a.id !== id));
+    
+    // Clean up profiles & credentials linked to this association
+    const profiles = getLocalData<Profile>('quran_profiles');
+    const profilesToDelete = profiles.filter(p => p.association_id === id);
+    const profileIdsToDelete = profilesToDelete.map(p => p.id);
+    
+    setLocalData('quran_profiles', profiles.filter(p => p.association_id !== id));
+    
+    const credentials = getLocalData<any>('quran_credentials');
+    setLocalData('quran_credentials', credentials.filter((c: any) => !profileIdsToDelete.includes(c.profile.id)));
+    
+    // Clean up other tables
+    const lessons = getLocalData<Lesson>('quran_lessons');
+    setLocalData('quran_lessons', lessons.filter(l => l.association_id !== id));
+    
+    const teachers = getLocalData<Teacher>('quran_teachers');
+    setLocalData('quran_teachers', teachers.filter(t => t.association_id !== id));
+    
+    const groups = getLocalData<Group>('quran_groups');
+    setLocalData('quran_groups', groups.filter(g => g.association_id !== id));
+    
+    const students = getLocalData<Student>('quran_students');
+    setLocalData('quran_students', students.filter(s => s.association_id !== id));
+    
+    const enrollments = getLocalData<Enrollment>('quran_enrollments');
+    setLocalData('quran_enrollments', enrollments.filter(e => e.association_id !== id));
+    
+    const expenses = getLocalData<Expense>('quran_expenses');
+    setLocalData('quran_expenses', expenses.filter(e => e.association_id !== id));
+  }
+}
+
 export async function getCurrentProfile(): Promise<Profile | null> {
   if (isSupabaseConfigured && supabase) {
     const { data: { user } } = await supabase.auth.getUser();

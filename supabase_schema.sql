@@ -365,6 +365,34 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- دالة خاصة بالمطور لحذف جمعية وكل الحسابات والبيانات المرتبطة بها نهائياً
+CREATE OR REPLACE FUNCTION public.admin_delete_association(p_association_id UUID)
+RETURNS VOID
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_user_id UUID;
+BEGIN
+    -- التحقق من صلاحيات المنشئ (يجب أن يكون مطور/Super Admin)
+    IF NOT EXISTS (
+        SELECT 1 FROM public.profiles 
+        WHERE id = auth.uid() AND role = 'super_admin'
+    ) THEN
+        RAISE EXCEPTION 'غير مصرح لك بحذف جمعيات. صلاحية المطور فقط مطلوبة.';
+    END IF;
+
+    -- 1. حذف حسابات المستخدمين المرتبطة بالجمعية من auth.users (والتي ستحذف تلقائياً بروفايلاتها عبر الـ Cascade)
+    FOR v_user_id IN 
+        SELECT id FROM public.profiles WHERE association_id = p_association_id
+    LOOP
+        DELETE FROM auth.users WHERE id = v_user_id;
+    END LOOP;
+
+    -- 2. حذف الجمعية نفسها (والتي ستحذف كافة بياناتها في جداول الطلاب والمعلمين وغيرهم عبر الـ Cascade)
+    DELETE FROM public.associations WHERE id = p_association_id;
+END;
+$$ LANGUAGE plpgsql;
+
 -- ==========================================================
 -- تهيئة حساب المطور الأول (Super Admin Seeding)
 -- ==========================================================
