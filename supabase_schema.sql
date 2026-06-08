@@ -316,6 +316,55 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- دالة خاصة بالمطور لتعديل بيانات حساب المدير والبروفايل بشكل آمن
+CREATE OR REPLACE FUNCTION public.admin_update_user(
+    p_user_id UUID,
+    p_email TEXT,
+    p_password TEXT,
+    p_name TEXT
+)
+RETURNS VOID
+SECURITY DEFINER
+AS $$
+BEGIN
+    -- التحقق من صلاحيات المنشئ (يجب أن يكون مطور/Super Admin)
+    IF NOT EXISTS (
+        SELECT 1 FROM public.profiles 
+        WHERE id = auth.uid() AND role = 'super_admin'
+    ) THEN
+        RAISE EXCEPTION 'غير مصرح لك بتعديل مستخدمين. صلاحية المطور فقط مطلوبة.';
+    END IF;
+
+    -- 1. تحديث البروفايل
+    UPDATE public.profiles
+    SET name = p_name,
+        email = p_email
+    WHERE id = p_user_id;
+
+    -- 2. تحديث الحساب الأساسي
+    IF p_password IS NOT NULL AND p_password <> '' THEN
+        UPDATE auth.users
+        SET email = p_email,
+            encrypted_password = crypt(p_password, gen_salt('bf')),
+            raw_user_meta_data = jsonb_set(raw_user_meta_data, '{name}', to_jsonb(p_name)),
+            updated_at = NOW()
+        WHERE id = p_user_id;
+    ELSE
+        UPDATE auth.users
+        SET email = p_email,
+            raw_user_meta_data = jsonb_set(raw_user_meta_data, '{name}', to_jsonb(p_name)),
+            updated_at = NOW()
+        WHERE id = p_user_id;
+    END IF;
+
+    -- 3. تحديث الهوية لمطابقة البريد
+    UPDATE auth.identities
+    SET identity_data = jsonb_build_object('sub', p_user_id, 'email', p_email),
+        updated_at = NOW()
+    WHERE user_id = p_user_id AND provider = 'email';
+END;
+$$ LANGUAGE plpgsql;
+
 -- ==========================================================
 -- تهيئة حساب المطور الأول (Super Admin Seeding)
 -- ==========================================================

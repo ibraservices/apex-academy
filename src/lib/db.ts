@@ -332,6 +332,36 @@ export async function adminCreateUser(email: string, password: string, name: str
   }
 }
 
+export async function adminUpdateUser(userId: string, email: string, password?: string, name?: string): Promise<void> {
+  if (isSupabaseConfigured && supabase) {
+    const { error } = await supabase.rpc('admin_update_user', {
+      p_user_id: userId,
+      p_email: email,
+      p_password: password || null,
+      p_name: name || ''
+    });
+    if (error) throw error;
+  } else {
+    const mockProfiles = getLocalData<Profile>('quran_profiles');
+    const updatedProfiles = mockProfiles.map(p => p.id === userId ? { ...p, email, name: name || p.name } as Profile : p);
+    setLocalData('quran_profiles', updatedProfiles);
+    
+    const mockCredentials = getLocalData<any>('quran_credentials');
+    const updatedCredentials = mockCredentials.map((c: any) => {
+      if (c.profile.id === userId) {
+        return {
+          ...c,
+          email,
+          password: password || c.password,
+          profile: { ...c.profile, email, name: name || c.profile.name }
+        };
+      }
+      return c;
+    });
+    setLocalData('quran_credentials', updatedCredentials);
+  }
+}
+
 // ==========================================
 // دالات المصادقة الوهمية عند عدم الاتصال بـ Supabase
 // ==========================================

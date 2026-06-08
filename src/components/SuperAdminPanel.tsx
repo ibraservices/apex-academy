@@ -13,7 +13,8 @@ import {
   RefreshCw,
   CheckCircle2,
   AlertCircle,
-  Clock
+  Clock,
+  Edit
 } from 'lucide-react';
 import { 
   supabase, 
@@ -21,6 +22,7 @@ import {
   getAssociations, 
   saveAssociation, 
   adminCreateUser, 
+  adminUpdateUser,
   mockLogout,
   type Association,
   type Profile 
@@ -39,7 +41,8 @@ export function SuperAdminPanel({ currentProfile, onLogout }: SuperAdminPanelPro
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // حقول إضافة جمعية جديدة
+  // حقول إضافة وتعديل الجمعيات
+  const [editingAssoc, setEditingAssoc] = useState<Association | null>(null);
   const [assocName, setAssocName] = useState('');
   const [managerName, setManagerName] = useState('');
   const [managerEmail, setManagerEmail] = useState('');
@@ -78,62 +81,130 @@ export function SuperAdminPanel({ currentProfile, onLogout }: SuperAdminPanelPro
     loadData();
   }, []);
 
-  const handleCreateAssociation = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!assocName || !managerName || !managerEmail || !managerPassword) {
-      setErrorMsg('يرجى ملء جميع الحقول المطلوبة لإنشاء الجمعية والمسؤول.');
-      return;
-    }
-    if (managerPassword.length < 6) {
-      setErrorMsg('يجب أن تكون كلمة المرور 6 أحرف على الأقل.');
-      return;
-    }
-
-    setSubmitting(true);
     setErrorMsg(null);
     setSuccessMsg(null);
 
-    try {
-      let trialEndsAt: string | null = null;
-      if (accountType === 'trial') {
-        const end = new Date();
-        end.setDate(end.getDate() + parseInt(trialDays || '30'));
-        trialEndsAt = end.toISOString();
+    if (editingAssoc) {
+      // وضع التعديل (Update Mode)
+      if (!assocName || !managerName || !managerEmail) {
+        setErrorMsg('يرجى ملء جميع الحقول المطلوبة لتحديث البيانات.');
+        return;
       }
 
-      // 1. إنشاء الجمعية أولاً
-      const newAssoc = await saveAssociation({
-        name: assocName.trim(),
-        status: 'active',
-        trial_ends_at: trialEndsAt
-      });
+      setSubmitting(true);
+      try {
+        // 1. تحديث اسم الجمعية
+        await saveAssociation({
+          ...editingAssoc,
+          name: assocName.trim()
+        });
 
-      // 2. إنشاء المستخدم وربطه بالجمعية
-      await adminCreateUser(
-        managerEmail.trim(),
-        managerPassword,
-        managerName.trim(),
-        newAssoc.id
-      );
+        // 2. تحديث حساب المدير
+        const manager = managers.find(m => m.association_id === editingAssoc.id);
+        if (manager) {
+          await adminUpdateUser(
+            manager.id,
+            managerEmail.trim(),
+            managerPassword ? managerPassword : undefined,
+            managerName.trim()
+          );
+        } else {
+          // حساب المدير غير متوفر، ننشئ حساباً جديداً
+          await adminCreateUser(
+            managerEmail.trim(),
+            managerPassword || '123456',
+            managerName.trim(),
+            editingAssoc.id
+          );
+        }
 
-      setSuccessMsg(`تم إنشاء جمعية "${assocName}" بنجاح، وتم إنشاء حساب المدير الخاص بها.`);
-      
-      // تفريغ الحقول
-      setAssocName('');
+        setSuccessMsg(`تم تحديث بيانات جمعية "${assocName}" والحساب المرتبط بها بنجاح.`);
+        handleCancelEdit();
+        await loadData();
+      } catch (err: any) {
+        console.error(err);
+        setErrorMsg(err.message || 'فشل تحديث البيانات. يرجى التحقق من المدخلات.');
+      } finally {
+        setSubmitting(false);
+      }
+    } else {
+      // وضع الإضافة الجديد (Create Mode)
+      if (!assocName || !managerName || !managerEmail || !managerPassword) {
+        setErrorMsg('يرجى ملء جميع الحقول المطلوبة لإنشاء الجمعية والمسؤول.');
+        return;
+      }
+      if (managerPassword.length < 6) {
+        setErrorMsg('يجب أن تكون كلمة المرور 6 أحرف على الأقل.');
+        return;
+      }
+
+      setSubmitting(true);
+      try {
+        let trialEndsAt: string | null = null;
+        if (accountType === 'trial') {
+          const end = new Date();
+          end.setDate(end.getDate() + parseInt(trialDays || '30'));
+          trialEndsAt = end.toISOString();
+        }
+
+        // 1. إنشاء الجمعية أولاً
+        const newAssoc = await saveAssociation({
+          name: assocName.trim(),
+          status: 'active',
+          trial_ends_at: trialEndsAt
+        });
+
+        // 2. إنشاء المستخدم وربطه بالجمعية
+        await adminCreateUser(
+          managerEmail.trim(),
+          managerPassword,
+          managerName.trim(),
+          newAssoc.id
+        );
+
+        setSuccessMsg(`تم إنشاء جمعية "${assocName}" بنجاح، وتم إنشاء حساب المدير الخاص بها.`);
+        
+        // تفريغ الحقول
+        setAssocName('');
+        setManagerName('');
+        setManagerEmail('');
+        setManagerPassword('');
+        setAccountType('unlimited');
+        setTrialDays('30');
+        
+        // إعادة تحميل البيانات
+        await loadData();
+      } catch (err: any) {
+        console.error(err);
+        setErrorMsg(err.message || 'فشل إنشاء الجمعية أو حساب المدير. يرجى التحقق من المدخلات.');
+      } finally {
+        setSubmitting(false);
+      }
+    }
+  };
+
+  const handleStartEdit = (assoc: Association) => {
+    setEditingAssoc(assoc);
+    setAssocName(assoc.name);
+    const manager = managers.find(m => m.association_id === assoc.id);
+    if (manager) {
+      setManagerName(manager.name);
+      setManagerEmail(manager.email);
+    } else {
       setManagerName('');
       setManagerEmail('');
-      setManagerPassword('');
-      setAccountType('unlimited');
-      setTrialDays('30');
-      
-      // إعادة تحميل البيانات
-      await loadData();
-    } catch (err: any) {
-      console.error(err);
-      setErrorMsg(err.message || 'فشل إنشاء الجمعية أو حساب المدير. يرجى التحقق من المدخلات.');
-    } finally {
-      setSubmitting(false);
     }
+    setManagerPassword(''); // نترك الرقم السري فارغاً حتى يكتب رقماً جديداً إن أراد التعديل
+  };
+
+  const handleCancelEdit = () => {
+    setEditingAssoc(null);
+    setAssocName('');
+    setManagerName('');
+    setManagerEmail('');
+    setManagerPassword('');
   };
 
   const handleToggleStatus = async (assoc: Association) => {
@@ -253,7 +324,7 @@ export function SuperAdminPanel({ currentProfile, onLogout }: SuperAdminPanelPro
         </div>
         <div style={styles.headerRight}>
           <h1 style={styles.headerTitle}>لوحة إدارة المنصة والجمعيات</h1>
-          <p style={styles.headerSubtitle}>إضافة الجمعيات والتحكم في صلاحيات وفترات التجربة</p>
+          <p style={styles.headerSubtitle}>إضافة الجمعيات وتعديل بياناتها والتحكم في صلاحيات وفترات التجربة</p>
         </div>
       </header>
 
@@ -291,14 +362,16 @@ export function SuperAdminPanel({ currentProfile, onLogout }: SuperAdminPanelPro
       </div>
 
       <div style={styles.mainGrid}>
-        {/* قسم إضافة جمعية جديدة */}
+        {/* قسم إضافة أو تعديل جمعية جديدة */}
         <section style={styles.formSection}>
           <div style={styles.sectionHeader}>
             <UserPlus size={20} style={{ color: '#0d9488' }} />
-            <h2 style={styles.sectionTitle}>تسجيل جمعية ومدير جديد</h2>
+            <h2 style={styles.sectionTitle}>
+              {editingAssoc ? `تعديل بيانات: ${editingAssoc.name}` : 'تسجيل جمعية ومدير جديد'}
+            </h2>
           </div>
 
-          <form onSubmit={handleCreateAssociation} style={styles.form}>
+          <form onSubmit={handleSubmit} style={styles.form}>
             <div style={styles.inputGroup}>
               <label style={styles.label}>اسم الجمعية</label>
               <input
@@ -311,31 +384,36 @@ export function SuperAdminPanel({ currentProfile, onLogout }: SuperAdminPanelPro
               />
             </div>
 
-            <div style={styles.inputGroup}>
-              <label style={styles.label}>نوع الاشتراك</label>
-              <select
-                value={accountType}
-                onChange={(e) => setAccountType(e.target.value as 'unlimited' | 'trial')}
-                style={styles.input}
-              >
-                <option value="unlimited">غير محدود (حساب مفتوح)</option>
-                <option value="trial">تجريبي (مؤقت بالأيام)</option>
-              </select>
-            </div>
+            {/* لا نعدل نوع الاشتراك من هنا بل نعدله مباشرة من الجدول لأمان وتكامل البيانات */}
+            {!editingAssoc && (
+              <>
+                <div style={styles.inputGroup}>
+                  <label style={styles.label}>نوع الاشتراك</label>
+                  <select
+                    value={accountType}
+                    onChange={(e) => setAccountType(e.target.value as 'unlimited' | 'trial')}
+                    style={styles.input}
+                  >
+                    <option value="unlimited">غير محدود (حساب مفتوح)</option>
+                    <option value="trial">تجريبي (مؤقت بالأيام)</option>
+                  </select>
+                </div>
 
-            {accountType === 'trial' && (
-              <div style={styles.inputGroup}>
-                <label style={styles.label}>عدد أيام التجربة</label>
-                <input
-                  type="number"
-                  min="1"
-                  placeholder="30"
-                  value={trialDays}
-                  onChange={(e) => setTrialDays(e.target.value)}
-                  style={styles.input}
-                  required
-                />
-              </div>
+                {accountType === 'trial' && (
+                  <div style={styles.inputGroup}>
+                    <label style={styles.label}>عدد أيام التجربة</label>
+                    <input
+                      type="number"
+                      min="1"
+                      placeholder="30"
+                      value={trialDays}
+                      onChange={(e) => setTrialDays(e.target.value)}
+                      style={styles.input}
+                      required
+                    />
+                  </div>
+                )}
+              </>
             )}
 
             <div style={styles.divider}>بيانات حساب المدير (المسؤول)</div>
@@ -371,33 +449,55 @@ export function SuperAdminPanel({ currentProfile, onLogout }: SuperAdminPanelPro
             </div>
 
             <div style={styles.inputGroup}>
-              <label style={styles.label}>كلمة المرور الافتراضية</label>
+              <label style={styles.label}>
+                {editingAssoc ? 'كلمة المرور الجديدة (اختياري)' : 'كلمة المرور الافتراضية'}
+              </label>
               <div style={styles.inputWrapper}>
                 <Lock size={16} style={styles.inputIcon} />
                 <input
                   type="password"
-                  placeholder="كلمة المرور (6 أحرف فأكثر)"
+                  placeholder={editingAssoc ? 'اتركها فارغة لعدم التعديل' : 'كلمة المرور (6 أحرف فأكثر)'}
                   value={managerPassword}
                   onChange={(e) => setManagerPassword(e.target.value)}
                   style={styles.inputWithIcon}
-                  required
+                  required={!editingAssoc}
                 />
               </div>
             </div>
 
-            <button type="submit" disabled={submitting} style={styles.submitBtn}>
-              {submitting ? (
-                <>
-                  <RefreshCw size={16} className="spin-animation" style={{ animation: 'spin 1s linear infinite' }} />
-                  <span>جاري إنشاء الحسابات...</span>
-                </>
-              ) : (
-                <>
-                  <Plus size={18} />
-                  <span>تأكيد وتسجيل الجمعية</span>
-                </>
+            <div style={{ display: 'flex', gap: '10px', marginTop: '12px' }}>
+              <button type="submit" disabled={submitting} style={{ ...styles.submitBtn, flex: 1, marginTop: 0 }}>
+                {submitting ? (
+                  <>
+                    <RefreshCw size={16} className="spin-animation" style={{ animation: 'spin 1s linear infinite' }} />
+                    <span>جاري الحفظ...</span>
+                  </>
+                ) : (
+                  <>
+                    {editingAssoc ? <CheckCircle2 size={18} /> : <Plus size={18} />}
+                    <span>{editingAssoc ? 'حفظ التحديثات' : 'تأكيد وتسجيل الجمعية'}</span>
+                  </>
+                )}
+              </button>
+              
+              {editingAssoc && (
+                <button
+                  type="button"
+                  onClick={handleCancelEdit}
+                  style={{
+                    ...styles.actionBtn,
+                    backgroundColor: '#f1f5f9',
+                    color: '#475569',
+                    padding: '12px 20px',
+                    borderRadius: '8px',
+                    fontSize: '0.95rem',
+                    fontWeight: '700',
+                  }}
+                >
+                  إلغاء
+                </button>
               )}
-            </button>
+            </div>
           </form>
         </section>
 
@@ -445,8 +545,16 @@ export function SuperAdminPanel({ currentProfile, onLogout }: SuperAdminPanelPro
                 <tbody>
                   {associations.map((assoc) => {
                     const manager = managers.find(m => m.association_id === assoc.id);
+                    const isCurrentEditing = editingAssoc?.id === assoc.id;
                     return (
-                      <tr key={assoc.id} className="super-admin-table-row" style={styles.tableRow}>
+                      <tr
+                        key={assoc.id}
+                        className="super-admin-table-row"
+                        style={{
+                          ...styles.tableRow,
+                          backgroundColor: isCurrentEditing ? '#f0fdfa' : 'transparent',
+                        }}
+                      >
                         <td style={styles.tableTd}>
                           <div style={styles.assocNameWrapper}>
                             <Building2 size={16} style={{ color: '#64748b' }} />
@@ -479,6 +587,21 @@ export function SuperAdminPanel({ currentProfile, onLogout }: SuperAdminPanelPro
                         </td>
                         <td style={styles.tableTd}>
                           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                            {/* زر التعديل */}
+                            <button
+                              onClick={() => handleStartEdit(assoc)}
+                              style={{
+                                ...styles.actionBtn,
+                                backgroundColor: '#f1f5f9',
+                                color: '#475569',
+                              }}
+                              title="تعديل اسم الجمعية وحساب المدير"
+                            >
+                              <Edit size={12} />
+                              <span>تعديل</span>
+                            </button>
+
+                            {/* زر التفعيل/التعطيل */}
                             <button
                               onClick={() => handleToggleStatus(assoc)}
                               style={{
