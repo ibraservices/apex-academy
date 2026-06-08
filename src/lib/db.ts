@@ -5,6 +5,7 @@ export interface Association {
   id: string;
   name: string;
   status: 'active' | 'suspended';
+  trial_ends_at?: string | null;
   created_at?: string;
 }
 
@@ -17,6 +18,7 @@ export interface Profile {
   association?: {
     name: string;
     status: 'active' | 'suspended';
+    trial_ends_at?: string | null;
   } | null;
   created_at?: string;
 }
@@ -272,7 +274,7 @@ export async function getCurrentProfile(): Promise<Profile | null> {
   if (isSupabaseConfigured && supabase) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return null;
-    const { data, error } = await supabase.from('profiles').select('*, association:associations(name, status)').eq('id', user.id).maybeSingle();
+    const { data, error } = await supabase.from('profiles').select('*, association:associations(name, status, trial_ends_at)').eq('id', user.id).maybeSingle();
     if (error) throw error;
     
     // التحقق من تعليق الحساب إن كان مسؤول جمعية
@@ -286,7 +288,13 @@ export async function getCurrentProfile(): Promise<Profile | null> {
     const profileStr = localStorage.getItem('al_hidaya_current_profile');
     if (!profileStr) return null;
     try {
-      return JSON.parse(profileStr);
+      const cachedProfile = JSON.parse(profileStr);
+      if (cachedProfile.association_id) {
+        const associations = getLocalData<Association>('quran_associations');
+        const assoc = associations.find(a => a.id === cachedProfile.association_id);
+        cachedProfile.association = assoc ? { name: assoc.name, status: assoc.status, trial_ends_at: assoc.trial_ends_at } : null;
+      }
+      return cachedProfile;
     } catch {
       return null;
     }
@@ -353,7 +361,7 @@ export async function mockLogin(email: string, password: string): Promise<Profil
     
     const profile: Profile = {
       ...user.profile,
-      association: assoc ? { name: assoc.name, status: assoc.status } : null
+      association: assoc ? { name: assoc.name, status: assoc.status, trial_ends_at: assoc.trial_ends_at } : null
     };
     
     localStorage.setItem('al_hidaya_current_profile', JSON.stringify(profile));

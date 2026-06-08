@@ -12,7 +12,8 @@ import {
   LogOut,
   RefreshCw,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Clock
 } from 'lucide-react';
 import { 
   supabase, 
@@ -43,6 +44,8 @@ export function SuperAdminPanel({ currentProfile, onLogout }: SuperAdminPanelPro
   const [managerName, setManagerName] = useState('');
   const [managerEmail, setManagerEmail] = useState('');
   const [managerPassword, setManagerPassword] = useState('');
+  const [accountType, setAccountType] = useState<'unlimited' | 'trial'>('unlimited');
+  const [trialDays, setTrialDays] = useState('30');
 
   const loadData = async () => {
     try {
@@ -91,10 +94,18 @@ export function SuperAdminPanel({ currentProfile, onLogout }: SuperAdminPanelPro
     setSuccessMsg(null);
 
     try {
+      let trialEndsAt: string | null = null;
+      if (accountType === 'trial') {
+        const end = new Date();
+        end.setDate(end.getDate() + parseInt(trialDays || '30'));
+        trialEndsAt = end.toISOString();
+      }
+
       // 1. إنشاء الجمعية أولاً
       const newAssoc = await saveAssociation({
         name: assocName.trim(),
-        status: 'active'
+        status: 'active',
+        trial_ends_at: trialEndsAt
       });
 
       // 2. إنشاء المستخدم وربطه بالجمعية
@@ -112,6 +123,8 @@ export function SuperAdminPanel({ currentProfile, onLogout }: SuperAdminPanelPro
       setManagerName('');
       setManagerEmail('');
       setManagerPassword('');
+      setAccountType('unlimited');
+      setTrialDays('30');
       
       // إعادة تحميل البيانات
       await loadData();
@@ -143,6 +156,59 @@ export function SuperAdminPanel({ currentProfile, onLogout }: SuperAdminPanelPro
     }
   };
 
+  const handleExtendTrial = async (assoc: Association) => {
+    try {
+      let currentEnd = assoc.trial_ends_at ? new Date(assoc.trial_ends_at) : new Date();
+      if (currentEnd.getTime() < new Date().getTime()) {
+        currentEnd = new Date(); // إذا انتهى الموعد بالفعل، ابدأ التمديد من اليوم
+      }
+      currentEnd.setDate(currentEnd.getDate() + 30);
+      
+      await saveAssociation({
+        ...assoc,
+        trial_ends_at: currentEnd.toISOString()
+      });
+      await loadData();
+      alert(`تم تمديد الفترة التجريبية لجمعية "${assoc.name}" لمدة 30 يوم بنجاح.`);
+    } catch (err) {
+      console.error(err);
+      alert('فشل تمديد الفترة التجريبية.');
+    }
+  };
+
+  const handleUpgradeToUnlimited = async (assoc: Association) => {
+    if (!window.confirm(`هل أنت متأكد من ترقية جمعية "${assoc.name}" إلى حساب مفتوح وغير محدود؟`)) return;
+    try {
+      await saveAssociation({
+        ...assoc,
+        trial_ends_at: null
+      });
+      await loadData();
+      alert(`تمت ترقية جمعية "${assoc.name}" لحساب غير محدود بنجاح.`);
+    } catch (err) {
+      console.error(err);
+      alert('فشل ترقية الحساب.');
+    }
+  };
+
+  const handleConvertToTrial = async (assoc: Association) => {
+    if (!window.confirm(`هل تريد تحويل حساب جمعية "${assoc.name}" إلى فترة تجريبية مؤقتة (30 يوم)؟`)) return;
+    try {
+      const end = new Date();
+      end.setDate(end.getDate() + 30);
+      
+      await saveAssociation({
+        ...assoc,
+        trial_ends_at: end.toISOString()
+      });
+      await loadData();
+      alert(`تم تحويل حساب جمعية "${assoc.name}" إلى تجريبي (ينتهي بعد 30 يوم).`);
+    } catch (err) {
+      console.error(err);
+      alert('فشل تحويل الحساب.');
+    }
+  };
+
   const handleLogoutClick = async () => {
     if (isSupabaseConfigured && supabase) {
       await supabase.auth.signOut();
@@ -150,6 +216,22 @@ export function SuperAdminPanel({ currentProfile, onLogout }: SuperAdminPanelPro
       mockLogout();
     }
     onLogout();
+  };
+
+  const renderTrialStatus = (trialEndsAt?: string | null) => {
+    if (!trialEndsAt) {
+      return <span style={{ ...styles.trialBadge, backgroundColor: '#e0f2fe', color: '#0369a1' }}>حساب مفتوح</span>;
+    }
+    const endDate = new Date(trialEndsAt);
+    const now = new Date();
+    const diffTime = endDate.getTime() - now.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays > 0) {
+      return <span style={{ ...styles.trialBadge, backgroundColor: '#ffedd5', color: '#ea580c' }}>تجريبي (باقي {diffDays} يوم)</span>;
+    } else {
+      return <span style={{ ...styles.trialBadge, backgroundColor: '#fee2e2', color: '#dc2626' }}>منتهية التجربة ({Math.abs(diffDays)} يوم مضت)</span>;
+    }
   };
 
   const activeCount = associations.filter(a => a.status === 'active').length;
@@ -171,7 +253,7 @@ export function SuperAdminPanel({ currentProfile, onLogout }: SuperAdminPanelPro
         </div>
         <div style={styles.headerRight}>
           <h1 style={styles.headerTitle}>لوحة إدارة المنصة والجمعيات</h1>
-          <p style={styles.headerSubtitle}>إضافة الجمعيات والتحكم في صلاحيات الوصول للأنظمة</p>
+          <p style={styles.headerSubtitle}>إضافة الجمعيات والتحكم في صلاحيات وفترات التجربة</p>
         </div>
       </header>
 
@@ -228,6 +310,33 @@ export function SuperAdminPanel({ currentProfile, onLogout }: SuperAdminPanelPro
                 required
               />
             </div>
+
+            <div style={styles.inputGroup}>
+              <label style={styles.label}>نوع الاشتراك</label>
+              <select
+                value={accountType}
+                onChange={(e) => setAccountType(e.target.value as 'unlimited' | 'trial')}
+                style={styles.input}
+              >
+                <option value="unlimited">غير محدود (حساب مفتوح)</option>
+                <option value="trial">تجريبي (مؤقت بالأيام)</option>
+              </select>
+            </div>
+
+            {accountType === 'trial' && (
+              <div style={styles.inputGroup}>
+                <label style={styles.label}>عدد أيام التجربة</label>
+                <input
+                  type="number"
+                  min="1"
+                  placeholder="30"
+                  value={trialDays}
+                  onChange={(e) => setTrialDays(e.target.value)}
+                  style={styles.input}
+                  required
+                />
+              </div>
+            )}
 
             <div style={styles.divider}>بيانات حساب المدير (المسؤول)</div>
 
@@ -327,10 +436,10 @@ export function SuperAdminPanel({ currentProfile, onLogout }: SuperAdminPanelPro
               <table style={styles.table}>
                 <thead>
                   <tr style={styles.tableRowHead}>
-                    <th style={styles.tableTh}>اسم الجمعية</th>
+                    <th style={styles.tableTh}>اسم الجمعية / الاشتراك</th>
                     <th style={styles.tableTh}>المدير المسؤول</th>
                     <th style={styles.tableTh}>حالة الحساب</th>
-                    <th style={styles.tableTh}>إجراءات التحكم</th>
+                    <th style={styles.tableTh}>إجراءات التحكم والاشتراك</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -342,6 +451,9 @@ export function SuperAdminPanel({ currentProfile, onLogout }: SuperAdminPanelPro
                           <div style={styles.assocNameWrapper}>
                             <Building2 size={16} style={{ color: '#64748b' }} />
                             <span style={styles.assocNameText}>{assoc.name}</span>
+                          </div>
+                          <div style={{ marginTop: '6px' }}>
+                            {renderTrialStatus(assoc.trial_ends_at)}
                           </div>
                         </td>
                         <td style={styles.tableTd}>
@@ -366,18 +478,60 @@ export function SuperAdminPanel({ currentProfile, onLogout }: SuperAdminPanelPro
                           </span>
                         </td>
                         <td style={styles.tableTd}>
-                          <button
-                            onClick={() => handleToggleStatus(assoc)}
-                            style={{
-                              ...styles.actionBtn,
-                              backgroundColor: assoc.status === 'active' ? '#fee2e2' : '#dcfce7',
-                              color: assoc.status === 'active' ? '#dc2626' : '#16a34a',
-                            }}
-                            title={assoc.status === 'active' ? 'تعطيل الحساب' : 'تفعيل الحساب'}
-                          >
-                            <Power size={14} />
-                            <span>{assoc.status === 'active' ? 'تعطيل' : 'تنشيط'}</span>
-                          </button>
+                          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                            <button
+                              onClick={() => handleToggleStatus(assoc)}
+                              style={{
+                                ...styles.actionBtn,
+                                backgroundColor: assoc.status === 'active' ? '#fee2e2' : '#dcfce7',
+                                color: assoc.status === 'active' ? '#dc2626' : '#16a34a',
+                              }}
+                              title={assoc.status === 'active' ? 'تعطيل الحساب' : 'تفعيل الحساب'}
+                            >
+                              <Power size={14} />
+                              <span>{assoc.status === 'active' ? 'تعطيل' : 'تنشيط'}</span>
+                            </button>
+
+                            {assoc.trial_ends_at ? (
+                              <>
+                                <button
+                                  onClick={() => handleExtendTrial(assoc)}
+                                  style={{
+                                    ...styles.actionBtn,
+                                    backgroundColor: '#fff7ed',
+                                    color: '#c2410c',
+                                  }}
+                                  title="تمديد الفترة التجريبية 30 يوم إضافية"
+                                >
+                                  <Clock size={12} />
+                                  <span>تمديد 30 يوم</span>
+                                </button>
+                                <button
+                                  onClick={() => handleUpgradeToUnlimited(assoc)}
+                                  style={{
+                                    ...styles.actionBtn,
+                                    backgroundColor: '#e0f2fe',
+                                    color: '#0369a1',
+                                  }}
+                                  title="تحويل إلى حساب مفتوح غير محدود"
+                                >
+                                  <span>ترقية لمفتوح</span>
+                                </button>
+                              </>
+                            ) : (
+                              <button
+                                onClick={() => handleConvertToTrial(assoc)}
+                                style={{
+                                  ...styles.actionBtn,
+                                  backgroundColor: '#f1f5f9',
+                                  color: '#475569',
+                                }}
+                                title="تحويل الحساب إلى تجريبي مؤقت 30 يوم"
+                              >
+                                <span>تحويل لتجريبي</span>
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -571,6 +725,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     borderRadius: '8px',
     fontSize: '0.9rem',
     color: '#0f172a',
+    backgroundColor: '#ffffff',
   },
   inputWrapper: {
     position: 'relative',
@@ -699,6 +854,13 @@ const styles: { [key: string]: React.CSSProperties } = {
     padding: '4px 8px',
     borderRadius: '4px',
     fontSize: '0.75rem',
+    fontWeight: '700',
+    display: 'inline-block',
+  },
+  trialBadge: {
+    padding: '2px 8px',
+    borderRadius: '4px',
+    fontSize: '0.7rem',
     fontWeight: '700',
     display: 'inline-block',
   },

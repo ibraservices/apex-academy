@@ -18,6 +18,7 @@ CREATE TABLE public.associations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
     status TEXT DEFAULT 'active' CHECK (status IN ('active', 'suspended')),
+    trial_ends_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

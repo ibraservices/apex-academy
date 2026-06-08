@@ -318,6 +318,12 @@ export default function App() {
     );
   }
 
+  const isTrialExpired = (): boolean => {
+    if (!profile || !profile.association?.trial_ends_at) return false;
+    const expiry = new Date(profile.association.trial_ends_at);
+    return expiry.getTime() < new Date().getTime();
+  };
+
   // إذا لم يسجل المستخدم دخوله، أظهر شاشة الدخول الموحدة
   if (!profile) {
     return <AuthManager onLoginSuccess={(p) => setProfile(p)} />;
@@ -326,6 +332,33 @@ export default function App() {
   // إذا كان المستخدم مطور (Super Admin)، أظهر لوحة تحكم الجمعيات
   if (profile.role === 'super_admin') {
     return <SuperAdminPanel currentProfile={profile} onLogout={handleLogout} />;
+  }
+
+  // إذا انتهت الفترة التجريبية للجمعية، أظهر شاشة التنبيه المنسقة
+  if (profile.role === 'association_admin' && isTrialExpired()) {
+    return (
+      <div style={styles.expiredContainer}>
+        <div style={styles.expiredCard}>
+          <div style={styles.expiredIconWrapper}>
+            <Wallet size={36} style={{ color: '#dc2626' }} />
+          </div>
+          <h1 style={styles.expiredTitle}>انتهت الفترة التجريبية</h1>
+          <p style={styles.expiredText}>
+            عذراً، لقد انتهت الفترة التجريبية المخصصة لجمعية <strong>"{profile.association?.name}"</strong>.
+          </p>
+          <p style={styles.expiredSubtext}>
+            يرجى التواصل مع مطور المنصة لتفعيل الحساب وتمديد الاشتراك.
+          </p>
+          <div style={styles.expiredContactBox}>
+            <div>البريد الإلكتروني للمطور: admin@alhidaya.com</div>
+          </div>
+          <button onClick={handleLogoutClick} style={styles.expiredBtn}>
+            <LogOut size={16} />
+            <span>تسجيل الخروج</span>
+          </button>
+        </div>
+      </div>
+    );
   }
 
   // إذا كان مستخدم جمعية عادي (Association Admin)، أظهر واجهة الإدارة العادية
@@ -429,3 +462,85 @@ export default function App() {
     </div>
   );
 }
+
+const styles: { [key: string]: React.CSSProperties } = {
+  expiredContainer: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: '100vh',
+    width: '100vw',
+    backgroundColor: '#f4f8f7',
+    direction: 'rtl',
+    fontFamily: 'Cairo, sans-serif',
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    zIndex: 9999,
+  },
+  expiredCard: {
+    width: '100%',
+    maxWidth: '480px',
+    backgroundColor: '#ffffff',
+    borderRadius: '16px',
+    padding: '40px 32px',
+    boxShadow: '0 10px 25px rgba(0, 0, 0, 0.05)',
+    border: '1px solid #e2e8f0',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    textAlign: 'center',
+    gap: '20px',
+  },
+  expiredIconWrapper: {
+    width: '64px',
+    height: '64px',
+    backgroundColor: '#fef2f2',
+    borderRadius: '9999px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  expiredTitle: {
+    fontSize: '1.4rem',
+    fontWeight: '800',
+    color: '#dc2626',
+    margin: 0,
+  },
+  expiredText: {
+    fontSize: '0.95rem',
+    color: '#334155',
+    margin: 0,
+    lineHeight: '1.6',
+  },
+  expiredSubtext: {
+    fontSize: '0.85rem',
+    color: '#64748b',
+    margin: 0,
+  },
+  expiredContactBox: {
+    backgroundColor: '#f8fafc',
+    padding: '12px 20px',
+    borderRadius: '8px',
+    border: '1px solid #e2e8f0',
+    fontSize: '0.85rem',
+    fontWeight: '600',
+    color: '#0f172a',
+  },
+  expiredBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '8px',
+    width: '100%',
+    padding: '12px',
+    backgroundColor: '#f1f5f9',
+    color: '#475569',
+    border: 'none',
+    borderRadius: '8px',
+    fontSize: '0.9rem',
+    fontWeight: '700',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+  },
+};
