@@ -433,21 +433,24 @@ BEGIN
             NOW()
         );
         
-        -- إدخال حساب البروفايل للمطور للتأكيد
-        INSERT INTO public.profiles (
-            id,
-            email,
-            name,
-            role,
-            association_id
-        )
-        VALUES (
-            v_admin_id,
-            v_admin_email,
-            'المطور',
-            'super_admin',
-            NULL
-        ) ON CONFLICT (id) DO UPDATE SET role = 'super_admin';
     END IF;
 END;
 $$;
+
+-- التأكد دائماً من وجود بروفايل للمطور وربطه بالمعرف الحقيقي في auth.users
+INSERT INTO public.profiles (
+    id,
+    email,
+    name,
+    role,
+    association_id
+)
+SELECT 
+    id,
+    email,
+    'المطور',
+    'super_admin',
+    NULL
+FROM auth.users
+WHERE email = 'admin@alhidaya.com'
+ON CONFLICT (id) DO UPDATE SET role = 'super_admin';
