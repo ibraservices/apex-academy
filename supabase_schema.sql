@@ -279,6 +279,7 @@ BEGIN
     INSERT INTO auth.identities (
         id,
         user_id,
+        provider_id,
         identity_data,
         provider,
         created_at,
@@ -287,6 +288,7 @@ BEGIN
     VALUES (
         v_user_id,
         v_user_id,
+        v_user_id::text,
         jsonb_build_object('sub', v_user_id, 'email', p_email),
         'email',
         NOW(),
@@ -365,6 +367,7 @@ BEGIN
         INSERT INTO auth.identities (
             id,
             user_id,
+            provider_id,
             identity_data,
             provider,
             created_at,
@@ -373,6 +376,7 @@ BEGIN
         VALUES (
             v_admin_id,
             v_admin_id,
+            v_admin_id::text,
             jsonb_build_object('sub', v_admin_id, 'email', v_admin_email),
             'email',
             NOW(),
