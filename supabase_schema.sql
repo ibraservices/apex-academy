@@ -263,7 +263,7 @@ BEGIN
       new.id,
       new.email,
       COALESCE(new.raw_user_meta_data->>'name', 'مسؤول جمعية'),
-      CASE WHEN new.email = 'admin@alhidaya.com' THEN 'super_admin' ELSE 'association_admin' END,
+      CASE WHEN new.email = 'admin@apex-academy.com' THEN 'super_admin' ELSE 'association_admin' END,
       NULL
     );
   END IF;
@@ -470,7 +470,7 @@ $$ LANGUAGE plpgsql;
 DO $$
 DECLARE
     v_admin_id UUID := '00000000-0000-0000-0000-000000000001';
-    v_admin_email TEXT := 'admin@alhidaya.com';
+    v_admin_email TEXT := 'admin@apex-academy.com';
     v_admin_pass TEXT := 'admin123456';
     v_encrypted_pass TEXT;
 BEGIN
@@ -550,5 +550,5 @@ SELECT
     'super_admin',
     NULL
 FROM auth.users
-WHERE email = 'admin@alhidaya.com'
+WHERE email = 'admin@apex-academy.com'
 ON CONFLICT (id) DO UPDATE SET role = 'super_admin';
