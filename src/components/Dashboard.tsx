@@ -93,7 +93,7 @@ export const Dashboard = ({
       <div className="page-header">
         <div className="page-title">
           <h2>لوحة التحكم</h2>
-          <p>نظرة عامة على إحصائيات وأنشطة الجمعية التعليمية</p>
+          <p>نظرة عامة على إحصائيات وأنشطة المركز التعليمي</p>
         </div>
         <div className="badge badge-green" style={{ padding: '8px 16px', fontSize: '0.9rem' }}>
           <Activity size={16} style={{ marginLeft: '6px' }} />
@@ -108,8 +108,8 @@ export const Dashboard = ({
             <Users size={28} />
           </div>
           <div className="stat-info">
-            <span className="stat-title">عدد الطلاب الكلي</span>
-            <span className="stat-value">{totalStudents} طالب/ـة</span>
+            <span className="stat-title">عدد التلاميذ الكلي</span>
+            <span className="stat-value">{totalStudents} تلميذ/ة</span>
           </div>
         </div>
 
@@ -118,8 +118,8 @@ export const Dashboard = ({
             <GraduationCap size={28} />
           </div>
           <div className="stat-info">
-            <span className="stat-title">المدرسين والمدرسات</span>
-            <span className="stat-value">{totalTeachers} معلمين</span>
+            <span className="stat-title">الأساتذة والأستاذات</span>
+            <span className="stat-value">{totalTeachers} أساتذة</span>
           </div>
         </div>
 
@@ -128,8 +128,8 @@ export const Dashboard = ({
             <Layers size={28} />
           </div>
           <div className="stat-info">
-            <span className="stat-title">المجموعات الحالية</span>
-            <span className="stat-value">{totalGroups} حلقات</span>
+            <span className="stat-title">الأفواج الحالية</span>
+            <span className="stat-value">{totalGroups} أفواج</span>
           </div>
         </div>
 
@@ -150,8 +150,8 @@ export const Dashboard = ({
         <div className="card" style={{ minHeight: 'auto' }}>
           <div className="card-header">
             <div>
-              <h3 className="card-title">تقرير الاشتراكات والتحصيل المالي</h3>
-              <p className="card-subtitle">تتبع المداخيل المستهدفة والمبالغ المحصلة والديون المتبقية</p>
+              <h3 className="card-title">تقرير الفواتير والتحصيل المالي</h3>
+              <p className="card-subtitle">تتبع المداخيل المستهدفة والمبالغ المحصلة والديون المتبقية للفواتير</p>
             </div>
             <DollarSign size={20} className="card-info-icon" style={{ color: 'var(--primary-green)' }} />
           </div>
@@ -223,25 +223,25 @@ export const Dashboard = ({
             </div>
           </div>
           <div className="card-footer" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-            <span>تحديث تلقائي للاشتراكات النشطة في هذا الشهر</span>
+            <span>تحديث تلقائي للفواتير والاشتراكات النشطة</span>
             <button className="btn-link" onClick={() => setView('students')} style={{ border: 'none', background: 'none', color: 'var(--primary-blue)', cursor: 'pointer', padding: 0 }}>عرض الاشتراكات</button>
           </div>
         </div>
 
-        {/* كرت توزيع الطلاب والمدرسين */}
+        {/* كرت توزيع التلاميذ والأساتذة */}
         <div className="card" style={{ minHeight: 'auto' }}>
           <div className="card-header">
             <div>
               <h3 className="card-title">توزيع الفئات حسب الجنس</h3>
-              <p className="card-subtitle">الذكور والإناث في الجمعية</p>
+              <p className="card-subtitle">الذكور والإناث في المركز</p>
             </div>
             <Users size={20} className="card-info-icon" />
           </div>
           <div className="card-body">
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              {/* الطلاب */}
+              {/* التلاميذ */}
               <div>
-                <h4 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '8px' }}>الطلاب والطالبات ({totalStudents}):</h4>
+                <h4 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '8px' }}>التلاميذ والتلميذات ({totalStudents}):</h4>
                 <div style={{ display: 'flex', height: '28px', borderRadius: '8px', overflow: 'hidden', backgroundColor: '#e2e8f0' }}>
                   <div 
                     style={{ 
@@ -257,7 +257,7 @@ export const Dashboard = ({
                     }}
                     title={`ذكور: ${maleStudents}`}
                   >
-                    {maleStudents > 0 && `ذكور (${maleStudents})`}
+                    {maleStudents > 0 && `تلاميذ (${maleStudents})`}
                   </div>
                   <div 
                     style={{ 
@@ -273,14 +273,14 @@ export const Dashboard = ({
                     }}
                     title={`إناث: ${femaleStudents}`}
                   >
-                    {femaleStudents > 0 && `إناث (${femaleStudents})`}
+                    {femaleStudents > 0 && `تلميذات (${femaleStudents})`}
                   </div>
                 </div>
               </div>
 
-              {/* المدرسين */}
+              {/* الأساتذة */}
               <div>
-                <h4 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '8px' }}>المدرسين والمدرسات ({totalTeachers}):</h4>
+                <h4 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '8px' }}>الأساتذة والأستاذات ({totalTeachers}):</h4>
                 <div style={{ display: 'flex', height: '28px', borderRadius: '8px', overflow: 'hidden', backgroundColor: '#e2e8f0' }}>
                   <div 
                     style={{ 
@@ -294,9 +294,9 @@ export const Dashboard = ({
                       fontWeight: 'bold',
                       transition: 'width 0.5s ease'
                     }}
-                    title={`معلمون: ${maleTeachers}`}
+                    title={`أساتذة: ${maleTeachers}`}
                   >
-                    {maleTeachers > 0 && `ذكور (${maleTeachers})`}
+                    {maleTeachers > 0 && `أساتذة (${maleTeachers})`}
                   </div>
                   <div 
                     style={{ 
@@ -310,9 +310,9 @@ export const Dashboard = ({
                       fontWeight: 'bold',
                       transition: 'width 0.5s ease'
                     }}
-                    title={`معلمات: ${femaleTeachers}`}
+                    title={`أستاذات: ${femaleTeachers}`}
                   >
-                    {femaleTeachers > 0 && `إناث (${femaleTeachers})`}
+                    {femaleTeachers > 0 && `أستاذات (${femaleTeachers})`}
                   </div>
                 </div>
               </div>
@@ -327,8 +327,8 @@ export const Dashboard = ({
         <div className="card" style={{ minHeight: 'auto' }}>
           <div className="card-header">
             <div>
-              <h3 className="card-title">الدروس التعليمية الحالية</h3>
-              <p className="card-subtitle">الدروس المسجلة وعدد مجموعاتها</p>
+              <h3 className="card-title">المواد الدراسية الحالية</h3>
+              <p className="card-subtitle">المواد المسجلة وعدد أفواجها</p>
             </div>
             <BookOpen size={20} className="card-info-icon" />
           </div>
@@ -344,15 +344,15 @@ export const Dashboard = ({
                       <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>{lesson.name}</span>
                     </div>
                     <div style={{ display: 'flex', gap: '8px' }}>
-                      <span className="badge badge-blue">{groupCount} مجموعات</span>
-                      <span className="badge badge-green">{studentCount} طلاب</span>
+                      <span className="badge badge-blue">{groupCount} أفواج</span>
+                      <span className="badge badge-green">{studentCount} تلاميذ</span>
                     </div>
                   </div>
                 );
               })}
               {lessons.length === 0 && (
                 <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)' }}>
-                  لا توجد دروس حالياً
+                  لا توجد مواد دراسية حالياً
                 </div>
               )}
             </div>
@@ -360,7 +360,7 @@ export const Dashboard = ({
           <div className="card-footer">
             <button className="btn btn-outline" style={{ width: '100%', justifyContent: 'center' }} onClick={() => setView('lessons')}>
               <BookOpen size={16} />
-              إدارة الدروس بالتفصيل
+              إدارة المواد الدراسية بالتفصيل
             </button>
           </div>
         </div>

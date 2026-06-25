@@ -8,7 +8,8 @@ import {
   Sparkles,
   RefreshCw,
   Wallet,
-  LogOut
+  LogOut,
+  Sliders
 } from 'lucide-react';
 import { 
   type Lesson, 
@@ -18,6 +19,9 @@ import {
   type Enrollment,
   type Expense,
   type Profile,
+  type Invoice,
+  type InvoiceItem,
+  type AcademicLevel,
   getLessons,
   saveLesson,
   deleteLesson,
@@ -39,7 +43,16 @@ import {
   getCurrentProfile,
   isSupabaseConfigured,
   supabase,
-  mockLogout
+  mockLogout,
+  getInvoices,
+  saveInvoice,
+  deleteInvoice,
+  getInvoiceItems,
+  saveInvoiceItem,
+  deleteInvoiceItem,
+  getAcademicLevels,
+  saveAcademicLevel,
+  deleteAcademicLevel
 } from './lib/db';
 import { Dashboard } from './components/Dashboard';
 import { LessonsManager } from './components/LessonsManager';
@@ -49,12 +62,15 @@ import { StudentsManager } from './components/StudentsManager';
 import { ExpensesManager } from './components/ExpensesManager';
 import { AuthManager } from './components/AuthManager';
 import { SuperAdminPanel } from './components/SuperAdminPanel';
+import { LandingPage } from './components/LandingPage';
+import { LevelsManager } from './components/LevelsManager';
 
 export default function App() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [authLoading, setAuthLoading] = useState<boolean>(true);
   const [view, setView] = useState<string>('dashboard');
   const [loading, setLoading] = useState<boolean>(false);
+  const [showLogin, setShowLogin] = useState<boolean>(false);
 
   // الكيانات البرمجية لمدير الجمعية
   const [lessons, setLessons] = useState<Lesson[]>([]);
@@ -63,18 +79,24 @@ export default function App() {
   const [students, setStudents] = useState<Student[]>([]);
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [invoiceItems, setInvoiceItems] = useState<InvoiceItem[]>([]);
+  const [academicLevels, setAcademicLevels] = useState<AcademicLevel[]>([]);
 
   // تحميل البيانات الخاصة بالجمعية المسجل عليها المستخدم الحالي
   const loadAllData = async () => {
     try {
       setLoading(true);
-      const [fetchedLessons, fetchedTeachers, fetchedGroups, fetchedStudents, fetchedEnrollments, fetchedExpenses] = await Promise.all([
+      const [fetchedLessons, fetchedTeachers, fetchedGroups, fetchedStudents, fetchedEnrollments, fetchedExpenses, fetchedInvoices, fetchedInvoiceItems, fetchedLevels] = await Promise.all([
         getLessons(),
         getTeachers(),
         getGroups(),
         getStudents(),
         getEnrollments(),
-        getExpenses()
+        getExpenses(),
+        getInvoices(),
+        getInvoiceItems(),
+        getAcademicLevels()
       ]);
 
       setLessons(fetchedLessons);
@@ -83,6 +105,9 @@ export default function App() {
       setStudents(fetchedStudents);
       setEnrollments(fetchedEnrollments);
       setExpenses(fetchedExpenses);
+      setInvoices(fetchedInvoices);
+      setInvoiceItems(fetchedInvoiceItems);
+      setAcademicLevels(fetchedLevels);
     } catch (error) {
       console.error('حدث خطأ أثناء تحميل البيانات:', error);
       alert('عذراً، تعذر تحميل البيانات. يرجى مراجعة إعدادات قاعدة البيانات.');
@@ -127,6 +152,7 @@ export default function App() {
   const handleLogout = () => {
     setProfile(null);
     setView('dashboard');
+    setShowLogin(false);
   };
 
   const handleLogoutClick = async () => {
@@ -193,16 +219,82 @@ export default function App() {
   };
 
   const handleSaveEnrollment = async (enrollmentData: Omit<Enrollment, 'id'> & { id?: string }) => {
-    await saveEnrollment({
+    const isNew = !enrollmentData.id;
+    const saved = await saveEnrollment({
       ...enrollmentData,
       association_id: profile?.association_id || undefined
     });
+    
+    if (isNew && saved) {
+      // إنشاء فاتورة تلقائية عند التسجيل
+      const invoiceDate = saved.start_date || new Date().toISOString().split('T')[0];
+      const dueDate = saved.end_date || new Date().toISOString().split('T')[0];
+      
+      const savedInvoice = await saveInvoice({
+        student_id: saved.student_id,
+        total_amount: saved.price,
+        paid_amount: saved.paid_amount || 0,
+        payment_status: saved.payment_status || 'unpaid',
+        invoice_date: invoiceDate,
+        due_date: dueDate,
+        association_id: profile?.association_id || undefined
+      });
+      
+      if (savedInvoice) {
+        const group = groups.find(g => g.id === saved.group_id);
+        const lesson = lessons.find(l => l.id === saved.lesson_id);
+        const desc = `اشتراك مادة ${lesson?.name || 'مادة دراسية'} - فوج ${group?.name || 'فوج دراسي'}`;
+        
+        await saveInvoiceItem({
+          invoice_id: savedInvoice.id,
+          enrollment_id: saved.id,
+          description: desc,
+          amount: saved.price,
+          association_id: profile?.association_id || undefined
+        });
+      }
+    }
     await loadAllData();
+    return saved;
   };
 
   const handleDeleteEnrollment = async (id: string) => {
+    // تنظيف الفواتير وبنودها المرتبطة بالاشتراك المحذوف
+    const linkedItems = invoiceItems.filter(ii => ii.enrollment_id === id);
+    for (const item of linkedItems) {
+      await deleteInvoiceItem(item.id);
+      
+      const remainingItems = invoiceItems.filter(ii => ii.invoice_id === item.invoice_id && ii.id !== item.id);
+      if (remainingItems.length === 0) {
+        await deleteInvoice(item.invoice_id);
+      }
+    }
+    
     await deleteEnrollment(id);
     await loadAllData();
+  };
+
+  const handleSaveInvoice = async (invoiceData: Omit<Invoice, 'id'> & { id?: string }) => {
+    const saved = await saveInvoice({
+      ...invoiceData,
+      association_id: profile?.association_id || undefined
+    });
+    await loadAllData();
+    return saved;
+  };
+
+  const handleDeleteInvoice = async (id: string) => {
+    await deleteInvoice(id);
+    await loadAllData();
+  };
+
+  const handleSaveInvoiceItem = async (itemData: Omit<InvoiceItem, 'id'> & { id?: string }) => {
+    const saved = await saveInvoiceItem({
+      ...itemData,
+      association_id: profile?.association_id || undefined
+    });
+    await loadAllData();
+    return saved;
   };
 
   const handleSaveExpense = async (expenseData: Omit<Expense, 'id'> & { id?: string }) => {
@@ -215,6 +307,19 @@ export default function App() {
 
   const handleDeleteExpense = async (id: string) => {
     await deleteExpense(id);
+    await loadAllData();
+  };
+
+  const handleSaveAcademicLevel = async (levelData: Omit<AcademicLevel, 'id'> & { id?: string }) => {
+    await saveAcademicLevel({
+      ...levelData,
+      association_id: profile?.association_id || undefined
+    });
+    await loadAllData();
+  };
+
+  const handleDeleteAcademicLevel = async (id: string) => {
+    await deleteAcademicLevel(id);
     await loadAllData();
   };
 
@@ -269,6 +374,7 @@ export default function App() {
             lessons={lessons}
             enrollments={enrollments}
             students={students}
+            academicLevels={academicLevels}
             onSave={handleSaveGroup}
             onDelete={handleDeleteGroup}
           />
@@ -280,10 +386,24 @@ export default function App() {
             groups={groups}
             lessons={lessons}
             enrollments={enrollments}
+            invoices={invoices}
+            invoiceItems={invoiceItems}
+            academicLevels={academicLevels}
             onSaveStudent={handleSaveStudent}
             onDeleteStudent={handleDeleteStudent}
             onSaveEnrollment={handleSaveEnrollment}
             onDeleteEnrollment={handleDeleteEnrollment}
+            onSaveInvoice={handleSaveInvoice}
+            onDeleteInvoice={handleDeleteInvoice}
+            onSaveInvoiceItem={handleSaveInvoiceItem}
+          />
+        );
+      case 'levels':
+        return (
+          <LevelsManager 
+            levels={academicLevels}
+            onSave={handleSaveAcademicLevel}
+            onDelete={handleDeleteAcademicLevel}
           />
         );
       case 'expenses':
@@ -292,7 +412,9 @@ export default function App() {
             expenses={expenses}
             teachers={teachers}
             groups={groups}
+            lessons={lessons}
             enrollments={enrollments}
+            students={students}
             onSaveExpense={handleSaveExpense}
             onDeleteExpense={handleDeleteExpense}
           />
@@ -324,9 +446,21 @@ export default function App() {
     return expiry.getTime() < new Date().getTime();
   };
 
-  // إذا لم يسجل المستخدم دخوله، أظهر شاشة الدخول الموحدة
+  // إذا لم يسجل المستخدم دخوله، أظهر الصفحة التعريفية أو بوابة الدخول الموحدة
   if (!profile) {
-    return <AuthManager onLoginSuccess={(p) => setProfile(p)} />;
+    if (showLogin) {
+      return (
+        <AuthManager 
+          onLoginSuccess={(p) => setProfile(p)} 
+          onBackToHome={() => setShowLogin(false)} 
+        />
+      );
+    }
+    return (
+      <LandingPage 
+        onOpenLogin={() => setShowLogin(true)} 
+      />
+    );
   }
 
   // إذا كان المستخدم مطور (Super Admin)، أظهر لوحة تحكم الجمعيات
@@ -344,7 +478,7 @@ export default function App() {
           </div>
           <h1 style={styles.expiredTitle}>انتهت الفترة التجريبية</h1>
           <p style={styles.expiredText}>
-            عذراً، لقد انتهت الفترة التجريبية المخصصة لجمعية <strong>"{profile.association?.name}"</strong>.
+            عذراً، لقد انتهت الفترة التجريبية المخصصة لمركز <strong>"{profile.association?.name}"</strong>.
           </p>
           <p style={styles.expiredSubtext}>
             يرجى التواصل مع مطور المنصة لتفعيل الحساب وتمديد الاشتراك.
@@ -371,8 +505,8 @@ export default function App() {
             <Sparkles size={24} />
           </div>
           <div className="sidebar-logo-text">
-            <h1>{profile.association?.name || 'جمعية القرآن'}</h1>
-            <p>لوحة إدارة الجمعية</p>
+            <h1>{profile.association?.name || 'مركز الدعم الدراسي'}</h1>
+            <p>لوحة إدارة المركز</p>
           </div>
         </div>
 
@@ -393,7 +527,7 @@ export default function App() {
                 onClick={() => setView('lessons')}
               >
                 <BookOpen size={20} />
-                <span>إدارة الدروس</span>
+                <span>إدارة المواد الدراسية</span>
               </button>
             </li>
             <li>
@@ -402,7 +536,7 @@ export default function App() {
                 onClick={() => setView('teachers')}
               >
                 <GraduationCap size={20} />
-                <span>إدارة المدرسين</span>
+                <span>إدارة الأساتذة</span>
               </button>
             </li>
             <li>
@@ -411,7 +545,7 @@ export default function App() {
                 onClick={() => setView('groups')}
               >
                 <Layers size={20} />
-                <span>إدارة المجموعات</span>
+                <span>إدارة الأفواج الدراسية</span>
               </button>
             </li>
             <li>
@@ -420,7 +554,16 @@ export default function App() {
                 onClick={() => setView('students')}
               >
                 <Users size={20} />
-                <span>إدارة الطلاب</span>
+                <span>إدارة التلاميذ</span>
+              </button>
+            </li>
+            <li>
+              <button 
+                className={`sidebar-item-btn ${view === 'levels' ? 'active' : ''}`}
+                onClick={() => setView('levels')}
+              >
+                <Sliders size={20} />
+                <span>المستويات والتخصصات</span>
               </button>
             </li>
             <li>
@@ -457,6 +600,40 @@ export default function App() {
 
       {/* منطقة العرض الرئيسية */}
       <main className="main-content">
+        {profile.role === 'association_admin' && (
+          <div className="subscription-banner">
+            <div className="subscription-info">
+              <span className="subscription-label">نوع الاشتراك:</span>
+              {profile.association?.trial_ends_at ? (
+                (() => {
+                  const endDate = new Date(profile.association.trial_ends_at);
+                  const now = new Date();
+                  const diffTime = endDate.getTime() - now.getTime();
+                  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                  const formattedDate = endDate.toLocaleDateString('ar-EG', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                  });
+                  return (
+                    <div className="subscription-badge-trial">
+                      <span className="pulse-dot"></span>
+                      <span>فترة تجريبية (متبقي {diffDays} يوم - ينتهي في {formattedDate})</span>
+                    </div>
+                  );
+                })()
+              ) : (
+                <div className="subscription-badge-unlimited">
+                  <Sparkles size={14} style={{ marginLeft: '6px' }} />
+                  <span>اشتراك مفتوح غير محدود</span>
+                </div>
+              )}
+            </div>
+            <div className="association-meta">
+              <span>المركز: <strong>{profile.association?.name}</strong></span>
+            </div>
+          </div>
+        )}
         {renderMainContent()}
       </main>
     </div>

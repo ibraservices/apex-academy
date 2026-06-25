@@ -1,12 +1,14 @@
 import { useState, type FormEvent } from 'react';
 import { Plus, Edit2, Trash2, X, Printer, CreditCard, FileText } from 'lucide-react';
-import { type Expense, type Teacher, type Group, type Enrollment, calculateTeacherSalary } from '../lib/db';
+import { type Expense, type Teacher, type Group, type Enrollment, type Student, type Lesson, calculateTeacherSalary } from '../lib/db';
 
 interface ExpensesManagerProps {
   expenses: Expense[];
   teachers: Teacher[];
   groups: Group[];
+  lessons: Lesson[];
   enrollments: Enrollment[];
+  students: Student[];
   onSaveExpense: (expense: Omit<Expense, 'id'> & { id?: string }) => Promise<void>;
   onDeleteExpense: (id: string) => Promise<void>;
 }
@@ -15,7 +17,9 @@ export const ExpensesManager = ({
   expenses,
   teachers,
   groups,
+  lessons,
   enrollments,
+  students,
   onSaveExpense,
   onDeleteExpense
 }: ExpensesManagerProps) => {
@@ -112,8 +116,8 @@ export const ExpensesManager = ({
   const monthGeneralExpenses = expenses.filter(exp => isDateInSelectedMonth(exp.date));
   const totalGeneralExpenses = monthGeneralExpenses.reduce((sum, exp) => sum + Number(exp.amount), 0);
 
-  // 3. رواتب المعلمين المحتسبة لهذا الشهر
-  // المعلمون النشطون هم الذين لديهم مجموعات ولدى مجموعاتهم طلاب مسجلين
+  // 3. رواتب الأساتذة المحتسبة لهذا الشهر
+  // الأساتذة النشطون هم الذين لديهم مجموعات ولدى مجموعاتهم تلاميذ مسجلين
   const teacherSalariesList = teachers.map(teacher => {
     // حساب الراتب بناءً على اشتراكات هذا الشهر المختار فقط
     const salary = calculateTeacherSalary(teacher, monthEnrollments, groups);
@@ -124,13 +128,31 @@ export const ExpensesManager = ({
       value: teacher.salary_value,
       calculatedSalary: salary
     };
-  }).filter(t => t.calculatedSalary > 0 || t.type === 'fixed'); // إظهار المدرسين المستحقين
+  }).filter(t => t.calculatedSalary > 0 || t.type === 'fixed'); // إظهار الأساتذة المستحقين
 
   const totalTeachersSalaries = teacherSalariesList.reduce((sum, t) => sum + t.calculatedSalary, 0);
 
   // 4. الحسابات الإجمالية للتقرير
   const totalExpenses = totalGeneralExpenses + (includeSalaries ? totalTeachersSalaries : 0);
   const netProfit = totalIncomeCollected - totalExpenses;
+
+  // الاشتراكات المنتهية ولها مستحقات معلقة للشهر المختار
+  const expiredUnpaidEnrollments = enrollments.filter(e => {
+    if (!isDateInSelectedMonth(e.start_date)) return false;
+    const endDate = new Date(e.end_date);
+    const now = new Date();
+    endDate.setHours(0, 0, 0, 0);
+    now.setHours(0, 0, 0, 0);
+    const isExpired = now > endDate;
+    if (!isExpired) return false;
+    const status = e.payment_status || 'paid';
+    return status === 'unpaid' || status === 'partial';
+  });
+
+  const totalUnpaidExpired = expiredUnpaidEnrollments.reduce((sum, e) => {
+    const pAmount = e.paid_amount !== undefined ? e.paid_amount : e.price;
+    return sum + (e.price - pAmount);
+  }, 0);
 
   // خيارات الأشهر باللغة العربية
   const monthsArabic = [
@@ -148,7 +170,7 @@ export const ExpensesManager = ({
       <div className="page-header no-print">
         <div className="page-title">
           <h2>إدارة النفقات والتقرير المالي</h2>
-          <p>متابعة وتوثيق المصاريف، رواتب المعلمين، وصافي الأرباح الشهرية</p>
+          <p>متابعة وتوثيق المصاريف، أجور الأساتذة، وصافي الأرباح الشهرية</p>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
           <button 
@@ -262,7 +284,7 @@ export const ExpensesManager = ({
             <div className="no-data-card">
               <CreditCard className="no-data-icon" size={48} />
               <h4 className="no-data-text">لا توجد نفقات مسجلة</h4>
-              <p>سجل مصاريف الجمعية (مثل الكراء، الفواتير، الأدوات) لتتمكن من رصد التقرير المالي بدقة.</p>
+              <p>سجل مصاريف المركز (مثل الكراء، الفواتير، الأدوات) لتتمكن من رصد التقرير المالي بدقة.</p>
             </div>
           )}
         </div>
@@ -302,7 +324,7 @@ export const ExpensesManager = ({
                 style={{ accentColor: 'var(--primary-green)', cursor: 'pointer', width: '18px', height: '18px' }}
               />
               <label htmlFor="includeSalariesCheckbox" style={{ fontWeight: 'bold', cursor: 'pointer', fontSize: '0.85rem' }}>
-                تضمين رواتب المعلمين في حساب المصاريف والأرباح
+                تضمين أجور الأساتذة في حساب المصاريف والأرباح
               </label>
             </div>
 
@@ -327,7 +349,7 @@ export const ExpensesManager = ({
               marginBottom: '25px'
             }}>
               <h2 style={{ fontSize: '1.6rem', color: 'var(--primary-green-dark)', fontWeight: '800' }}>
-                التقرير المالي الشهري للجمعية
+                التقرير المالي الشهري للمركز
               </h2>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', marginTop: '6px' }}>
                 الفترة المحددة: <strong style={{ color: 'var(--text-dark)' }}>{monthsArabic[reportMonth - 1]} / {reportYear}</strong>
@@ -362,7 +384,7 @@ export const ExpensesManager = ({
                 </span>
                 <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>
                   {includeSalaries 
-                    ? `(${monthGeneralExpenses.length} نفقات عامة + رواتب المدرسين)`
+                    ? `(${monthGeneralExpenses.length} نفقات عامة + رواتب الأساتذة)`
                     : `(${monthGeneralExpenses.length} نفقات عامة - دون الرواتب)`}
                 </span>
               </div>
@@ -431,13 +453,13 @@ export const ExpensesManager = ({
               {includeSalaries && (
                 <div>
                   <h3 style={{ fontSize: '1.05rem', fontWeight: 'bold', color: 'var(--text-dark)', borderRight: '4px solid var(--primary-blue)', paddingRight: '8px', marginBottom: '12px' }}>
-                    ثانياً: رواتب المعلمين المحتسبة لهذا الشهر ({teacherSalariesList.length})
+                    ثانياً: أجور الأساتذة المحتسبة لهذا الشهر ({teacherSalariesList.length})
                   </h3>
                   {teacherSalariesList.length > 0 ? (
                     <table className="data-table" style={{ width: '100%' }}>
                       <thead>
                         <tr>
-                          <th>اسم المدرس</th>
+                          <th>اسم الأستاذ</th>
                           <th>طريقة احتساب الراتب</th>
                           <th>الأجر المستحق بالدرهم</th>
                         </tr>
@@ -449,20 +471,20 @@ export const ExpensesManager = ({
                             <td>
                               {t.type === 'fixed' 
                                 ? `راتب قار (${t.value} د.م. شهرياً)` 
-                                : `نسبة مئوية (${t.value}% من اشتراكات طلابه المجمعة)`}
+                                : `نسبة مئوية (${t.value}% من اشتراكات تلاميذه المجمعة)`}
                             </td>
                             <td style={{ fontWeight: 'bold', color: 'var(--primary-blue-dark)' }}>{t.calculatedSalary} د.م.</td>
                           </tr>
                         ))}
                         <tr style={{ backgroundColor: '#fafafa', fontWeight: 'bold' }}>
-                          <td colSpan={2} style={{ textAlign: 'left' }}>مجموع رواتب المدرسين المستحقة:</td>
+                          <td colSpan={2} style={{ textAlign: 'left' }}>مجموع أجور الأساتذة المستحقة:</td>
                           <td style={{ color: 'var(--primary-blue-dark)' }}>{totalTeachersSalaries} د.م.</td>
                         </tr>
                       </tbody>
                     </table>
                   ) : (
                     <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', padding: '10px', backgroundColor: '#f9f9f9', borderRadius: '8px' }}>
-                      لا توجد أجور مستحقة للمدرسين في هذا الشهر (لا توجد اشتراكات نشطة في حلقاتهم).
+                      لا توجد أجور مستحقة للأساتذة في هذا الشهر (لا توجد اشتراكات نشطة في أفواجهم).
                     </p>
                   )}
                 </div>
@@ -471,13 +493,14 @@ export const ExpensesManager = ({
               {/* جدول 3: المداخيل بالتفصيل (للتوثيق) */}
               <div>
                 <h3 style={{ fontSize: '1.05rem', fontWeight: 'bold', color: 'var(--text-dark)', borderRight: '4px solid var(--primary-green)', paddingRight: '8px', marginBottom: '12px' }}>
-                  ثالثاً: تفاصيل مقبوضات اشتراكات الطلاب المجمعة ({monthEnrollments.length})
+                  ثالثاً: تفاصيل مقبوضات اشتراكات التلاميذ المجمعة ({monthEnrollments.length})
                 </h3>
                 {monthEnrollments.length > 0 ? (
                   <table className="data-table" style={{ width: '100%' }}>
                     <thead>
                       <tr>
-                        <th>معرف الاشتراك</th>
+                        <th>اسم التلميذ(ة)</th>
+                        <th>المادة / الفوج</th>
                         <th>تاريخ البدء</th>
                         <th>ثمن الاشتراك الكلي</th>
                         <th>المبلغ المحصل فعلياً</th>
@@ -485,11 +508,15 @@ export const ExpensesManager = ({
                     </thead>
                     <tbody>
                       {monthEnrollments.map(e => {
+                        const student = students.find(s => s.id === e.student_id);
+                        const group = groups.find(g => g.id === e.group_id);
+                        const lesson = lessons.find(l => l.id === e.lesson_id);
                         const status = e.payment_status || 'paid';
                         const collected = status === 'paid' ? e.price : (status === 'unpaid' ? 0 : (e.paid_amount || 0));
                         return (
                           <tr key={e.id}>
-                            <td>{e.id}</td>
+                            <td style={{ fontWeight: 'bold' }}>{student?.name || 'تلميذ محذوف'}</td>
+                            <td>{lesson?.name || 'مادة محذوفة'} - {group?.name || 'فوج محذوف'}</td>
                             <td>{e.start_date}</td>
                             <td>{e.price} د.م.</td>
                             <td style={{ fontWeight: 'bold', color: 'var(--primary-green-dark)' }}>{collected} د.م.</td>
@@ -497,14 +524,62 @@ export const ExpensesManager = ({
                         );
                       })}
                       <tr style={{ backgroundColor: '#fafafa', fontWeight: 'bold' }}>
-                        <td colSpan={3} style={{ textAlign: 'left' }}>إجمالي المداخيل المحصلة:</td>
+                        <td colSpan={4} style={{ textAlign: 'left' }}>إجمالي المداخيل المحصلة:</td>
                         <td style={{ color: 'var(--primary-green-dark)' }}>{totalIncomeCollected} د.م.</td>
                       </tr>
                     </tbody>
                   </table>
                 ) : (
                   <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', padding: '10px', backgroundColor: '#f9f9f9', borderRadius: '8px' }}>
-                    لا توجد اشتراكات طلاب مسجلة في هذا الشهر.
+                    لا توجد اشتراكات تلاميذ مسجلة في هذا الشهر.
+                  </p>
+                )}
+              </div>
+
+              {/* جدول 4: الاشتراكات المنتهية وبها مستحقات معلقة */}
+              <div style={{ marginTop: '20px' }}>
+                <h3 style={{ fontSize: '1.05rem', fontWeight: 'bold', color: 'var(--text-dark)', borderRight: '4px solid #ef4444', paddingRight: '8px', marginBottom: '12px' }}>
+                  رابعاً: الاشتراكات المنتهية ولها مستحقات مالية معلقة (الديون غير المحصلة)
+                </h3>
+                {expiredUnpaidEnrollments.length > 0 ? (
+                  <table className="data-table" style={{ width: '100%' }}>
+                    <thead>
+                      <tr>
+                        <th>اسم التلميذ(ة)</th>
+                        <th>المادة / الفوج</th>
+                        <th>تاريخ البدء والانتهاء</th>
+                        <th>ثمن الاشتراك الكلي</th>
+                        <th>المبلغ المدفوع</th>
+                        <th>المستحقات المعلقة</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {expiredUnpaidEnrollments.map(e => {
+                        const student = students.find(s => s.id === e.student_id);
+                        const group = groups.find(g => g.id === e.group_id);
+                        const lesson = lessons.find(l => l.id === e.lesson_id);
+                        const pAmount = e.paid_amount !== undefined ? e.paid_amount : e.price;
+                        const unpaid = e.price - pAmount;
+                        return (
+                          <tr key={e.id}>
+                            <td style={{ fontWeight: 'bold' }}>{student?.name || 'تلميذ محذوف'}</td>
+                            <td>{lesson?.name || 'مادة محذوفة'} - {group?.name || 'فوج محذوف'}</td>
+                            <td style={{ fontSize: '0.85rem' }}>من {e.start_date} إلى {e.end_date}</td>
+                            <td>{e.price} د.م.</td>
+                            <td style={{ color: 'var(--primary-green)' }}>{pAmount} د.م.</td>
+                            <td style={{ fontWeight: 'bold', color: '#ef4444' }}>{unpaid} د.م.</td>
+                          </tr>
+                        );
+                      })}
+                      <tr style={{ backgroundColor: '#fafafa', fontWeight: 'bold' }}>
+                        <td colSpan={5} style={{ textAlign: 'left' }}>إجمالي الديون المعلقة غير المحصلة للاشتراكات المنتهية:</td>
+                        <td style={{ color: '#ef4444' }}>{totalUnpaidExpired} د.م.</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                ) : (
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', padding: '10px', backgroundColor: '#f9f9f9', borderRadius: '8px' }}>
+                    لا توجد اشتراكات منتهية بها مستحقات معلقة في هذا الشهر.
                   </p>
                 )}
               </div>
@@ -522,7 +597,7 @@ export const ExpensesManager = ({
                   <p style={{ marginTop: '50px', color: '#ccc' }}>__________________</p>
                 </div>
                 <div style={{ textAlign: 'center' }}>
-                  <p style={{ fontWeight: 'bold', textDecoration: 'underline' }}>توقيع رئيس الجمعية</p>
+                  <p style={{ fontWeight: 'bold', textDecoration: 'underline' }}>توقيع مدير المركز</p>
                   <p style={{ marginTop: '50px', color: '#ccc' }}>__________________</p>
                 </div>
               </div>

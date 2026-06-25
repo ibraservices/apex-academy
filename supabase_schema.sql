@@ -4,12 +4,15 @@
 -- ==========================================================
 
 -- 1. تنظيف الجداول القديمة لضمان بنية نظيفة ومعزولة
+DROP TABLE IF EXISTS public.invoice_items CASCADE;
+DROP TABLE IF EXISTS public.invoices CASCADE;
 DROP TABLE IF EXISTS public.enrollments CASCADE;
 DROP TABLE IF EXISTS public.expenses CASCADE;
 DROP TABLE IF EXISTS public.groups CASCADE;
 DROP TABLE IF EXISTS public.students CASCADE;
 DROP TABLE IF EXISTS public.teachers CASCADE;
 DROP TABLE IF EXISTS public.lessons CASCADE;
+DROP TABLE IF EXISTS public.academic_levels CASCADE;
 DROP TABLE IF EXISTS public.profiles CASCADE;
 DROP TABLE IF EXISTS public.associations CASCADE;
 
@@ -29,6 +32,16 @@ CREATE TABLE public.profiles (
     name TEXT NOT NULL,
     role TEXT NOT NULL CHECK (role IN ('super_admin', 'association_admin')),
     association_id UUID REFERENCES public.associations(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 3.1. جدول المستويات الدراسية والتخصصات (academic_levels)
+CREATE TABLE public.academic_levels (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    stage TEXT NOT NULL CHECK (stage IN ('primary', 'middle', 'high', 'university', 'other')),
+    specializations TEXT[] NOT NULL DEFAULT '{}',
+    association_id UUID REFERENCES public.associations(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -61,6 +74,8 @@ CREATE TABLE public.groups (
     lesson_id UUID REFERENCES public.lessons(id) ON DELETE CASCADE,
     schedule TEXT,
     gender_target TEXT NOT NULL CHECK (gender_target IN ('male', 'female', 'all')),
+    level_id UUID REFERENCES public.academic_levels(id) ON DELETE SET NULL,
+    specialization TEXT,
     association_id UUID REFERENCES public.associations(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -71,9 +86,12 @@ CREATE TABLE public.students (
     name TEXT NOT NULL,
     age INTEGER CHECK (age >= 0),
     birth_date DATE,
-    gender TEXT NOT NULL CHECK (gender IN ('male', 'female')),
+    gender TEXT CHECK (gender IN ('male', 'female')),
     parent_name TEXT,
     parent_phone TEXT,
+    academic_level TEXT,
+    specialization TEXT,
+    registration_date DATE DEFAULT CURRENT_DATE,
     association_id UUID REFERENCES public.associations(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -89,6 +107,31 @@ CREATE TABLE public.enrollments (
     end_date DATE NOT NULL,
     payment_status TEXT NOT NULL DEFAULT 'unpaid' CHECK (payment_status IN ('paid', 'partial', 'unpaid')),
     paid_amount NUMERIC NOT NULL DEFAULT 0,
+    notes TEXT DEFAULT '',
+    association_id UUID REFERENCES public.associations(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 8.1. جدول الفواتير (invoices)
+CREATE TABLE public.invoices (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    student_id UUID REFERENCES public.students(id) ON DELETE CASCADE,
+    total_amount NUMERIC NOT NULL DEFAULT 0,
+    paid_amount NUMERIC NOT NULL DEFAULT 0,
+    payment_status TEXT NOT NULL DEFAULT 'unpaid' CHECK (payment_status IN ('paid', 'partial', 'unpaid')),
+    invoice_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    due_date DATE NOT NULL DEFAULT (CURRENT_DATE + INTERVAL '1 month'),
+    association_id UUID REFERENCES public.associations(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 8.2. جدول بنود الفواتير (invoice_items)
+CREATE TABLE public.invoice_items (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    invoice_id UUID REFERENCES public.invoices(id) ON DELETE CASCADE,
+    enrollment_id UUID REFERENCES public.enrollments(id) ON DELETE SET NULL,
+    description TEXT NOT NULL,
+    amount NUMERIC NOT NULL DEFAULT 0,
     association_id UUID REFERENCES public.associations(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -112,12 +155,15 @@ CREATE TABLE public.expenses (
 -- تفعيل الـ RLS على كافة الجداول
 ALTER TABLE public.associations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.academic_levels ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.lessons ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.teachers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.groups ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.enrollments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.expenses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.invoices ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.invoice_items ENABLE ROW LEVEL SECURITY;
 
 -- دوال أمان لجلب معرف الجلسة الحالية ودور المستخدم
 CREATE OR REPLACE FUNCTION public.get_user_association_id()
@@ -148,6 +194,12 @@ CREATE POLICY "users_update_own_profile" ON public.profiles
   FOR UPDATE USING (id = auth.uid()) WITH CHECK (id = auth.uid());
 
 -- سياسات الجداول التشغيلية (معزولة لكل جمعية ومفتوحة للمطور)
+-- المستويات الدراسية والتخصصات
+CREATE POLICY "academic_levels_super_admin" ON public.academic_levels FOR ALL USING (public.get_user_role() = 'super_admin');
+CREATE POLICY "academic_levels_association_admin" ON public.academic_levels FOR ALL 
+  USING (public.get_user_role() = 'association_admin' AND association_id = public.get_user_association_id())
+  WITH CHECK (public.get_user_role() = 'association_admin' AND association_id = public.get_user_association_id());
+
 -- الدروس
 CREATE POLICY "lessons_super_admin" ON public.lessons FOR ALL USING (public.get_user_role() = 'super_admin');
 CREATE POLICY "lessons_association_admin" ON public.lessons FOR ALL 
@@ -181,6 +233,18 @@ CREATE POLICY "enrollments_association_admin" ON public.enrollments FOR ALL
 -- النفقات
 CREATE POLICY "expenses_super_admin" ON public.expenses FOR ALL USING (public.get_user_role() = 'super_admin');
 CREATE POLICY "expenses_association_admin" ON public.expenses FOR ALL 
+  USING (public.get_user_role() = 'association_admin' AND association_id = public.get_user_association_id())
+  WITH CHECK (public.get_user_role() = 'association_admin' AND association_id = public.get_user_association_id());
+
+-- الفواتير
+CREATE POLICY "invoices_super_admin" ON public.invoices FOR ALL USING (public.get_user_role() = 'super_admin');
+CREATE POLICY "invoices_association_admin" ON public.invoices FOR ALL 
+  USING (public.get_user_role() = 'association_admin' AND association_id = public.get_user_association_id())
+  WITH CHECK (public.get_user_role() = 'association_admin' AND association_id = public.get_user_association_id());
+
+-- بنود الفواتير
+CREATE POLICY "invoice_items_super_admin" ON public.invoice_items FOR ALL USING (public.get_user_role() = 'super_admin');
+CREATE POLICY "invoice_items_association_admin" ON public.invoice_items FOR ALL 
   USING (public.get_user_role() = 'association_admin' AND association_id = public.get_user_association_id())
   WITH CHECK (public.get_user_role() = 'association_admin' AND association_id = public.get_user_association_id());
 
@@ -296,7 +360,7 @@ BEGIN
         NOW()
     );
 
-    -- إدخال السجل في البروفايل وربطه بالجمعية
+    -- إدخال السجل في البروفايل أو تحديثه إذا تم إنشاؤه تلقائياً بواسطة التريجر
     INSERT INTO public.profiles (
         id,
         email,
@@ -310,7 +374,13 @@ BEGIN
         p_name,
         'association_admin',
         p_association_id
-    );
+    )
+    ON CONFLICT (id) DO UPDATE
+    SET 
+        association_id = EXCLUDED.association_id,
+        role = EXCLUDED.role,
+        name = EXCLUDED.name,
+        email = EXCLUDED.email;
 
     RETURN v_user_id;
 END;

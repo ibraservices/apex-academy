@@ -13,7 +13,6 @@ import {
   RefreshCw,
   CheckCircle2,
   AlertCircle,
-  Clock,
   Edit,
   Trash2
 } from 'lucide-react';
@@ -43,7 +42,12 @@ export function SuperAdminPanel({ currentProfile, onLogout }: SuperAdminPanelPro
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // حقول إضافة وتعديل الجمعيات
+  const [students, setStudents] = useState<any[]>([]);
+  const [teachers, setTeachers] = useState<any[]>([]);
+  const [groups, setGroups] = useState<any[]>([]);
+  const [enrollments, setEnrollments] = useState<any[]>([]);
+
+  // حقول إضافة وتعديل المراكز
   const [editingAssoc, setEditingAssoc] = useState<Association | null>(null);
   const [assocName, setAssocName] = useState('');
   const [managerName, setManagerName] = useState('');
@@ -67,9 +71,27 @@ export function SuperAdminPanel({ currentProfile, onLogout }: SuperAdminPanelPro
           .eq('role', 'association_admin');
         if (error) throw error;
         setManagers(data || []);
+
+        // جلب الإحصائيات سحابياً لكل الجداول لجمع الإحصائيات
+        const [studentsRes, teachersRes, groupsRes, enrollmentsRes] = await Promise.all([
+          supabase.from('students').select('association_id'),
+          supabase.from('teachers').select('association_id'),
+          supabase.from('groups').select('association_id'),
+          supabase.from('enrollments').select('association_id, paid_amount')
+        ]);
+        setStudents(studentsRes.data || []);
+        setTeachers(teachersRes.data || []);
+        setGroups(groupsRes.data || []);
+        setEnrollments(enrollmentsRes.data || []);
       } else {
         const localProfiles = localStorage.getItem('quran_profiles');
         setManagers(localProfiles ? JSON.parse(localProfiles) : []);
+
+        // جلب الإحصائيات محلياً
+        setStudents(JSON.parse(localStorage.getItem('quran_students') || '[]'));
+        setTeachers(JSON.parse(localStorage.getItem('quran_teachers') || '[]'));
+        setGroups(JSON.parse(localStorage.getItem('quran_groups') || '[]'));
+        setEnrollments(JSON.parse(localStorage.getItem('quran_enrollments') || '[]'));
       }
     } catch (err: any) {
       console.error(err);
@@ -104,7 +126,7 @@ export function SuperAdminPanel({ currentProfile, onLogout }: SuperAdminPanelPro
           trialEndsAt = end.toISOString();
         }
 
-        // 1. تحديث بيانات الجمعية والاشتراك التجريبي
+        // 1. تحديث بيانات المركز والاشتراك التجريبي
         await saveAssociation({
           ...editingAssoc,
           name: assocName.trim(),
@@ -130,7 +152,7 @@ export function SuperAdminPanel({ currentProfile, onLogout }: SuperAdminPanelPro
           );
         }
 
-        setSuccessMsg(`تم تحديث بيانات جمعية "${assocName}" والحساب المرتبط بها بنجاح.`);
+        setSuccessMsg(`تم تحديث بيانات مركز "${assocName}" والحساب المرتبط بها بنجاح.`);
         handleCancelEdit();
         await loadData();
       } catch (err: any) {
@@ -142,7 +164,7 @@ export function SuperAdminPanel({ currentProfile, onLogout }: SuperAdminPanelPro
     } else {
       // وضع الإضافة الجديد (Create Mode)
       if (!assocName || !managerName || !managerEmail || !managerPassword) {
-        setErrorMsg('يرجى ملء جميع الحقول المطلوبة لإنشاء الجمعية والمسؤول.');
+        setErrorMsg('يرجى ملء جميع الحقول المطلوبة لإنشاء المركز والمسؤول.');
         return;
       }
       if (managerPassword.length < 6) {
@@ -159,14 +181,14 @@ export function SuperAdminPanel({ currentProfile, onLogout }: SuperAdminPanelPro
           trialEndsAt = end.toISOString();
         }
 
-        // 1. إنشاء الجمعية أولاً
+        // 1. إنشاء المركز أولاً
         const newAssoc = await saveAssociation({
           name: assocName.trim(),
           status: 'active',
           trial_ends_at: trialEndsAt
         });
 
-        // 2. إنشاء المستخدم وربطه بالجمعية
+        // 2. إنشاء المستخدم وربطه بالمركز
         await adminCreateUser(
           managerEmail.trim(),
           managerPassword,
@@ -174,7 +196,7 @@ export function SuperAdminPanel({ currentProfile, onLogout }: SuperAdminPanelPro
           newAssoc.id
         );
 
-        setSuccessMsg(`تم إنشاء جمعية "${assocName}" بنجاح، وتم إنشاء حساب المدير الخاص بها.`);
+        setSuccessMsg(`تم إنشاء مركز "${assocName}" بنجاح، وتم إنشاء حساب المدير الخاص بها.`);
         
         // تفريغ الحقول
         setAssocName('');
@@ -188,7 +210,7 @@ export function SuperAdminPanel({ currentProfile, onLogout }: SuperAdminPanelPro
         await loadData();
       } catch (err: any) {
         console.error(err);
-        setErrorMsg(err.message || 'فشل إنشاء الجمعية أو حساب المدير. يرجى التحقق من المدخلات.');
+        setErrorMsg(err.message || 'فشل إنشاء المركز أو حساب المدير. يرجى التحقق من المدخلات.');
       } finally {
         setSubmitting(false);
       }
@@ -236,8 +258,8 @@ export function SuperAdminPanel({ currentProfile, onLogout }: SuperAdminPanelPro
   const handleToggleStatus = async (assoc: Association) => {
     const newStatus = assoc.status === 'active' ? 'suspended' : 'active';
     const confirmMsg = assoc.status === 'active' 
-      ? `هل أنت متأكد من تعليق (تعطيل) حساب جمعية "${assoc.name}"؟ لن يتمكن مديروها من الدخول.`
-      : `هل تريد تنشيط حساب جمعية "${assoc.name}" مجدداً؟`;
+      ? `هل أنت متأكد من تعليق (تعطيل) حساب مركز "${assoc.name}"؟ لن يتمكن مديروها من الدخول.`
+      : `هل تريد تنشيط حساب مركز "${assoc.name}" مجدداً؟`;
 
     if (!window.confirm(confirmMsg)) return;
 
@@ -249,86 +271,19 @@ export function SuperAdminPanel({ currentProfile, onLogout }: SuperAdminPanelPro
       await loadData();
     } catch (err: any) {
       console.error(err);
-      alert('فشل تغيير حالة الجمعية.');
-    }
-  };
-
-  const handleExtendTrial = async (assoc: Association) => {
-    try {
-      let currentEnd = assoc.trial_ends_at ? new Date(assoc.trial_ends_at) : new Date();
-      if (currentEnd.getTime() < new Date().getTime()) {
-        currentEnd = new Date(); // إذا انتهى الموعد بالفعل، ابدأ التمديد من اليوم
-      }
-      currentEnd.setDate(currentEnd.getDate() + 30);
-      
-      await saveAssociation({
-        ...assoc,
-        trial_ends_at: currentEnd.toISOString()
-      });
-      await loadData();
-      alert(`تم تمديد الفترة التجريبية لجمعية "${assoc.name}" لمدة 30 يوم بنجاح.`);
-      
-      // إذا كان المطور يقوم بتعديل نفس الجمعية حالياً، نقوم بتحديث مدة التجربة في المدخلات
-      if (editingAssoc?.id === assoc.id) {
-        setTrialDays('30');
-      }
-    } catch (err) {
-      console.error(err);
-      alert('فشل تمديد الفترة التجريبية.');
-    }
-  };
-
-  const handleUpgradeToUnlimited = async (assoc: Association) => {
-    if (!window.confirm(`هل أنت متأكد من ترقية جمعية "${assoc.name}" إلى حساب مفتوح وغير محدود؟`)) return;
-    try {
-      await saveAssociation({
-        ...assoc,
-        trial_ends_at: null
-      });
-      await loadData();
-      alert(`تمت ترقية جمعية "${assoc.name}" لحساب غير محدود بنجاح.`);
-      
-      if (editingAssoc?.id === assoc.id) {
-        setAccountType('unlimited');
-      }
-    } catch (err) {
-      console.error(err);
-      alert('فشل ترقية الحساب.');
-    }
-  };
-
-  const handleConvertToTrial = async (assoc: Association) => {
-    if (!window.confirm(`هل تريد تحويل حساب جمعية "${assoc.name}" إلى فترة تجريبية مؤقتة (30 يوم)؟`)) return;
-    try {
-      const end = new Date();
-      end.setDate(end.getDate() + 30);
-      
-      await saveAssociation({
-        ...assoc,
-        trial_ends_at: end.toISOString()
-      });
-      await loadData();
-      alert(`تم تحويل حساب جمعية "${assoc.name}" إلى تجريبي (ينتهي بعد 30 يوم).`);
-      
-      if (editingAssoc?.id === assoc.id) {
-        setAccountType('trial');
-        setTrialDays('30');
-      }
-    } catch (err) {
-      console.error(err);
-      alert('فشل تحويل الحساب.');
+      alert('فشل تغيير حالة المركز.');
     }
   };
 
   const handleDeleteAssociation = async (assoc: Association) => {
-    const confirmMsg = `⚠️ هل أنت متأكد تماماً من حذف جمعية "${assoc.name}" بشكل نهائي؟\n\n` +
-      `سيؤدي هذا الإجراء إلى حذف كافة بيانات الحلقات، الطلاب، المدرسين، المصاريف، والاشتراكات التابعة لها، بالإضافة إلى حذف حساب المدير المسؤول عنها تماماً.\n\n` +
+    const confirmMsg = `⚠️ هل أنت متأكد تماماً من حذف مركز "${assoc.name}" بشكل نهائي؟\n\n` +
+      `سيؤدي هذا الإجراء إلى حذف كافة بيانات الأفواج، التلاميذ، الأساتذة، المصاريف، والاشتراكات التابعة لها، بالإضافة إلى حذف حساب المدير المسؤول عنها تماماً.\n\n` +
       `لا يمكن التراجع عن هذا الإجراء!`;
 
     if (!window.confirm(confirmMsg)) return;
 
     // تأكيد أمني بكتابة الاسم للتحقق
-    const nameInput = window.prompt(`لتأكيد الحذف النهائي، يرجى كتابة اسم الجمعية بالضبط ("${assoc.name}"):`);
+    const nameInput = window.prompt(`لتأكيد الحذف النهائي، يرجى كتابة اسم المركز بالضبط ("${assoc.name}"):`);
     if (nameInput !== assoc.name) {
       alert('الاسم غير متطابق. تم إلغاء عملية الحذف.');
       return;
@@ -339,14 +294,14 @@ export function SuperAdminPanel({ currentProfile, onLogout }: SuperAdminPanelPro
       setErrorMsg(null);
       setSuccessMsg(null);
       await deleteAssociation(assoc.id);
-      setSuccessMsg(`تم حذف جمعية "${assoc.name}" وكافة بياناتها وحساباتها بنجاح.`);
+      setSuccessMsg(`تم حذف مركز "${assoc.name}" وكافة بياناتها وحساباتها بنجاح.`);
       if (editingAssoc?.id === assoc.id) {
         handleCancelEdit();
       }
       await loadData();
     } catch (err: any) {
       console.error(err);
-      setErrorMsg(err.message || 'فشل حذف الجمعية. يرجى مراجعة إعدادات قاعدة البيانات.');
+      setErrorMsg(err.message || 'فشل حذف المركز. يرجى مراجعة إعدادات قاعدة البيانات.');
     } finally {
       setLoading(false);
     }
@@ -395,8 +350,8 @@ export function SuperAdminPanel({ currentProfile, onLogout }: SuperAdminPanelPro
           </button>
         </div>
         <div style={styles.headerRight}>
-          <h1 style={styles.headerTitle}>لوحة إدارة المنصة والجمعيات</h1>
-          <p style={styles.headerSubtitle}>إضافة الجمعيات وتعديل بياناتها والتحكم في صلاحيات وفترات التجربة</p>
+          <h1 style={styles.headerTitle}>لوحة إدارة المنصة والمراكز</h1>
+          <p style={styles.headerSubtitle}>إضافة المراكز وتعديل بياناتها والتحكم في صلاحيات وفترات التجربة</p>
         </div>
       </header>
 
@@ -407,7 +362,7 @@ export function SuperAdminPanel({ currentProfile, onLogout }: SuperAdminPanelPro
             <Building2 size={24} />
           </div>
           <div>
-            <div style={styles.statLabel}>إجمالي الجمعيات</div>
+            <div style={styles.statLabel}>إجمالي المراكز</div>
             <div style={styles.statValue}>{associations.length}</div>
           </div>
         </div>
@@ -417,7 +372,7 @@ export function SuperAdminPanel({ currentProfile, onLogout }: SuperAdminPanelPro
             <Activity size={24} />
           </div>
           <div>
-            <div style={styles.statLabel}>الجمعيات النشطة</div>
+            <div style={styles.statLabel}>المراكز النشطة</div>
             <div style={styles.statValue}>{activeCount}</div>
           </div>
         </div>
@@ -427,28 +382,28 @@ export function SuperAdminPanel({ currentProfile, onLogout }: SuperAdminPanelPro
             <ShieldAlert size={24} />
           </div>
           <div>
-            <div style={styles.statLabel}>الجمعيات المعطلة</div>
+            <div style={styles.statLabel}>المراكز المعطلة</div>
             <div style={styles.statValue}>{suspendedCount}</div>
           </div>
         </div>
       </div>
 
       <div style={styles.mainGrid}>
-        {/* قسم إضافة أو تعديل جمعية جديدة */}
+        {/* قسم إضافة أو تعديل مركز جديدة */}
         <section style={styles.formSection}>
           <div style={styles.sectionHeader}>
             <UserPlus size={20} style={{ color: '#0d9488' }} />
             <h2 style={styles.sectionTitle}>
-              {editingAssoc ? `تعديل بيانات: ${editingAssoc.name}` : 'تسجيل جمعية ومدير جديد'}
+              {editingAssoc ? `تعديل بيانات: ${editingAssoc.name}` : 'تسجيل مركز ومدير جديد'}
             </h2>
           </div>
 
           <form onSubmit={handleSubmit} style={styles.form}>
             <div style={styles.inputGroup}>
-              <label style={styles.label}>اسم الجمعية</label>
+              <label style={styles.label}>اسم المركز</label>
               <input
                 type="text"
-                placeholder="مثال: جمعية الفرقان لتحفيظ القرآن"
+                placeholder="مثال: أكاديمية أيبكس للدعم الدراسي"
                 value={assocName}
                 onChange={(e) => setAssocName(e.target.value)}
                 style={styles.input}
@@ -544,7 +499,7 @@ export function SuperAdminPanel({ currentProfile, onLogout }: SuperAdminPanelPro
                 ) : (
                   <>
                     {editingAssoc ? <CheckCircle2 size={18} /> : <Plus size={18} />}
-                    <span>{editingAssoc ? 'حفظ التحديثات' : 'تأكيد وتسجيل الجمعية'}</span>
+                    <span>{editingAssoc ? 'حفظ التحديثات' : 'تأكيد وتسجيل المركز'}</span>
                   </>
                 )}
               </button>
@@ -570,11 +525,11 @@ export function SuperAdminPanel({ currentProfile, onLogout }: SuperAdminPanelPro
           </form>
         </section>
 
-        {/* قسم استعراض وإدارة الجمعيات */}
+        {/* قسم استعراض وإدارة المراكز */}
         <section style={styles.tableSection}>
           <div style={styles.sectionHeader}>
             <Building2 size={20} style={{ color: '#0d9488' }} />
-            <h2 style={styles.sectionTitle}>قائمة الجمعيات المسجلة بالمنصة</h2>
+            <h2 style={styles.sectionTitle}>قائمة المراكز المسجلة بالمنصة</h2>
           </div>
 
           {successMsg && (
@@ -594,156 +549,142 @@ export function SuperAdminPanel({ currentProfile, onLogout }: SuperAdminPanelPro
           {loading ? (
             <div style={styles.tableLoader}>
               <RefreshCw size={30} className="spin-animation" style={{ color: '#0d9488', animation: 'spin 1s linear infinite' }} />
-              <p>جاري تحميل قائمة الجمعيات الحالية...</p>
+              <p>جاري تحميل قائمة المراكز الحالية...</p>
             </div>
           ) : associations.length === 0 ? (
             <div style={styles.emptyState}>
-              <p>لا توجد جمعيات مسجلة حالياً بالمنصة. يرجى تسجيل أول جمعية.</p>
+              <p>لا توجد مراكز مسجلة حالياً بالمنصة. يرجى تسجيل أول مركز.</p>
             </div>
           ) : (
-            <div style={styles.tableContainer}>
-              <table style={styles.table}>
-                <thead>
-                  <tr style={styles.tableRowHead}>
-                    <th style={styles.tableTh}>اسم الجمعية / الاشتراك</th>
-                    <th style={styles.tableTh}>المدير المسؤول</th>
-                    <th style={styles.tableTh}>حالة الحساب</th>
-                    <th style={styles.tableTh}>إجراءات التحكم والاشتراك</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {associations.map((assoc) => {
-                    const manager = managers.find(m => m.association_id === assoc.id);
-                    const isCurrentEditing = editingAssoc?.id === assoc.id;
-                    return (
-                      <tr
-                        key={assoc.id}
-                        className="super-admin-table-row"
+            <div style={styles.cardsGrid}>
+              {associations.map((assoc) => {
+                const manager = managers.find(m => m.association_id === assoc.id);
+                const isCurrentEditing = editingAssoc?.id === assoc.id;
+                
+                // حساب الإحصائيات الحالية لهذه المركز
+                const studentCount = students.filter(s => s.association_id === assoc.id).length;
+                const teacherCount = teachers.filter(t => t.association_id === assoc.id).length;
+                const groupCount = groups.filter(g => g.association_id === assoc.id).length;
+                const totalIncome = enrollments
+                  .filter(e => e.association_id === assoc.id)
+                  .reduce((sum, e) => sum + Number(e.paid_amount || 0), 0);
+
+                return (
+                  <div 
+                    key={assoc.id} 
+                    className="super-admin-assoc-card"
+                    style={{
+                      ...styles.assocCard,
+                      border: isCurrentEditing ? '2px solid var(--primary-green)' : '1px solid var(--border-color)',
+                      boxShadow: isCurrentEditing ? 'var(--shadow-lg)' : 'var(--shadow-sm)'
+                    }}
+                  >
+                    {/* رأس الكرت */}
+                    <div style={styles.cardHeader}>
+                      <div style={styles.cardTitleSection}>
+                        <Building2 size={20} style={{ color: 'var(--primary-green)' }} />
+                        <h3 style={styles.cardTitle}>{assoc.name}</h3>
+                      </div>
+                      <span
                         style={{
-                          ...styles.tableRow,
-                          backgroundColor: isCurrentEditing ? '#f0fdfa' : 'transparent',
+                          ...styles.statusBadge,
+                          backgroundColor: assoc.status === 'active' ? '#dcfce7' : '#fee2e2',
+                          color: assoc.status === 'active' ? '#16a34a' : '#dc2626',
                         }}
                       >
-                        <td style={styles.tableTd}>
-                          <div style={styles.assocNameWrapper}>
-                            <Building2 size={16} style={{ color: '#64748b' }} />
-                            <span style={styles.assocNameText}>{assoc.name}</span>
-                          </div>
-                          <div style={{ marginTop: '6px' }}>
-                            {renderTrialStatus(assoc.trial_ends_at)}
-                          </div>
-                        </td>
-                        <td style={styles.tableTd}>
-                          {manager ? (
-                            <div>
-                              <div style={{ fontWeight: 'bold', fontSize: '0.85rem' }}>{manager.name}</div>
-                              <div style={{ color: '#64748b', fontSize: '0.75rem' }}>{manager.email}</div>
-                            </div>
-                          ) : (
-                            <span style={{ color: '#ef4444', fontSize: '0.8rem', fontWeight: 'bold' }}>معلق (بدون حساب فعال)</span>
-                          )}
-                        </td>
-                        <td style={styles.tableTd}>
-                          <span
-                            style={{
-                              ...styles.statusBadge,
-                              backgroundColor: assoc.status === 'active' ? '#dcfce7' : '#fee2e2',
-                              color: assoc.status === 'active' ? '#16a34a' : '#dc2626',
-                            }}
-                          >
-                            {assoc.status === 'active' ? 'نشط' : 'معطل'}
-                          </span>
-                        </td>
-                        <td style={styles.tableTd}>
-                          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                            {/* زر التعديل */}
-                            <button
-                              onClick={() => handleStartEdit(assoc)}
-                              style={{
-                                ...styles.actionBtn,
-                                backgroundColor: '#f1f5f9',
-                                color: '#475569',
-                              }}
-                              title="تعديل اسم الجمعية وحساب المدير والاشتراك"
-                            >
-                              <Edit size={12} />
-                              <span>تعديل</span>
-                            </button>
+                        {assoc.status === 'active' ? 'نشط' : 'معطل'}
+                      </span>
+                    </div>
 
-                            {/* زر التفعيل/التعطيل */}
-                            <button
-                              onClick={() => handleToggleStatus(assoc)}
-                              style={{
-                                ...styles.actionBtn,
-                                backgroundColor: assoc.status === 'active' ? '#fee2e2' : '#dcfce7',
-                                color: assoc.status === 'active' ? '#dc2626' : '#16a34a',
-                              }}
-                              title={assoc.status === 'active' ? 'تعطيل الحساب' : 'تفعيل الحساب'}
-                            >
-                              <Power size={14} />
-                              <span>{assoc.status === 'active' ? 'تعطيل' : 'تنشيط'}</span>
-                            </button>
+                    {/* تفاصيل الاشتراك */}
+                    <div style={styles.cardSubscription}>
+                      {renderTrialStatus(assoc.trial_ends_at)}
+                    </div>
 
-                            {assoc.trial_ends_at ? (
-                              <>
-                                <button
-                                  onClick={() => handleExtendTrial(assoc)}
-                                  style={{
-                                    ...styles.actionBtn,
-                                    backgroundColor: '#fff7ed',
-                                    color: '#c2410c',
-                                  }}
-                                  title="تمديد الفترة التجريبية 30 يوم إضافية"
-                                >
-                                  <Clock size={12} />
-                                  <span>تمديد 30 يوم</span>
-                                </button>
-                                <button
-                                  onClick={() => handleUpgradeToUnlimited(assoc)}
-                                  style={{
-                                    ...styles.actionBtn,
-                                    backgroundColor: '#e0f2fe',
-                                    color: '#0369a1',
-                                  }}
-                                  title="تحويل إلى حساب مفتوح غير محدود"
-                                >
-                                  <span>ترقية لمفتوح</span>
-                                </button>
-                              </>
-                            ) : (
-                              <button
-                                onClick={() => handleConvertToTrial(assoc)}
-                                style={{
-                                  ...styles.actionBtn,
-                                  backgroundColor: '#f1f5f9',
-                                  color: '#475569',
-                                }}
-                                title="تحويل الحساب إلى تجريبي مؤقت 30 يوم"
-                              >
-                                <span>تحويل لتجريبي</span>
-                              </button>
-                            )}
-
-                            {/* زر الحذف النهائي */}
-                            <button
-                              onClick={() => handleDeleteAssociation(assoc)}
-                              style={{
-                                ...styles.actionBtn,
-                                backgroundColor: '#fef2f2',
-                                color: '#dc2626',
-                              }}
-                              title="حذف الجمعية نهائياً مع كافة حساباتها وبياناتها"
-                            >
-                              <Trash2 size={12} />
-                              <span>حذف</span>
-                            </button>
+                    {/* بيانات المدير المسؤول */}
+                    <div style={styles.cardManagerSection}>
+                      <span style={styles.sectionLabel}>المدير المسؤول:</span>
+                      {manager ? (
+                        <div style={styles.managerInfo}>
+                          <div style={styles.managerName}>{manager.name}</div>
+                          <div style={styles.managerEmail}>
+                            <Mail size={12} style={{ marginLeft: '4px', verticalAlign: 'middle' }} />
+                            <span>{manager.email}</span>
                           </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                        </div>
+                      ) : (
+                        <div style={styles.noManager}>
+                          <ShieldAlert size={14} style={{ marginLeft: '4px' }} />
+                          <span>معلق (بدون حساب فعال)</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* الإحصائيات الخاصة بالمركز */}
+                    <div style={styles.cardStatsSection}>
+                      <div style={styles.statItem}>
+                        <span style={styles.cardStatLabel}>تلاميذ</span>
+                        <span style={styles.cardStatValue}>{studentCount}</span>
+                      </div>
+                      <div style={styles.statItem}>
+                        <span style={styles.cardStatLabel}>أساتذة</span>
+                        <span style={styles.cardStatValue}>{teacherCount}</span>
+                      </div>
+                      <div style={styles.statItem}>
+                        <span style={styles.cardStatLabel}>أفواج</span>
+                        <span style={styles.cardStatValue}>{groupCount}</span>
+                      </div>
+                      <div style={styles.statItem}>
+                        <span style={styles.cardStatLabel}>مداخيل</span>
+                        <span style={styles.cardStatValue}>{totalIncome} <span style={{ fontSize: '0.65rem' }}>د.م</span></span>
+                      </div>
+                    </div>
+
+                    {/* أزرار التحكم */}
+                    <div style={styles.cardActions}>
+                      <button
+                        onClick={() => handleStartEdit(assoc)}
+                        style={{
+                          ...styles.cardActionBtn,
+                          backgroundColor: '#f1f5f9',
+                          color: '#475569',
+                        }}
+                        title="تعديل اسم المركز وحساب المدير والاشتراك"
+                      >
+                        <Edit size={12} />
+                        <span>تعديل</span>
+                      </button>
+
+                      <button
+                        onClick={() => handleToggleStatus(assoc)}
+                        style={{
+                          ...styles.cardActionBtn,
+                          backgroundColor: assoc.status === 'active' ? '#fee2e2' : '#dcfce7',
+                          color: assoc.status === 'active' ? '#dc2626' : '#16a34a',
+                        }}
+                        title={assoc.status === 'active' ? 'تعطيل الحساب' : 'تفعيل الحساب'}
+                      >
+                        <Power size={12} />
+                        <span>{assoc.status === 'active' ? 'تعطيل' : 'تنشيط'}</span>
+                      </button>
+
+                      <button
+                        onClick={() => handleDeleteAssociation(assoc)}
+                        style={{
+                          ...styles.cardActionBtn,
+                          backgroundColor: '#fef2f2',
+                          color: '#dc2626',
+                          marginRight: 'auto'
+                        }}
+                        title="حذف المركز نهائياً مع كافة حساباتها وبياناتها"
+                      >
+                        <Trash2 size={12} />
+                        <span>حذف</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </section>
@@ -1078,6 +1019,128 @@ const styles: { [key: string]: React.CSSProperties } = {
     padding: '6px 12px',
     borderRadius: '6px',
     fontSize: '0.75rem',
+    fontWeight: '700',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+  },
+  cardsGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+    gap: '24px',
+    marginTop: '16px',
+  },
+  assocCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: '12px',
+    padding: '24px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '16px',
+    transition: 'all 0.3s ease',
+    position: 'relative',
+  },
+  cardHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: '12px',
+    borderBottom: '1px solid #f1f5f9',
+    paddingBottom: '12px',
+  },
+  cardTitleSection: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+  },
+  cardTitle: {
+    fontSize: '1.05rem',
+    fontWeight: '800',
+    color: '#0f172a',
+    margin: 0,
+  },
+  cardSubscription: {
+    marginTop: '-4px',
+  },
+  cardManagerSection: {
+    backgroundColor: '#f8fafc',
+    borderRadius: '8px',
+    padding: '12px',
+    fontSize: '0.8rem',
+    border: '1px solid #f1f5f9',
+  },
+  sectionLabel: {
+    display: 'block',
+    fontSize: '0.75rem',
+    fontWeight: '700',
+    color: '#64748b',
+    marginBottom: '6px',
+  },
+  managerInfo: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+  },
+  managerName: {
+    fontWeight: '700',
+    color: '#334155',
+    fontSize: '0.85rem',
+  },
+  managerEmail: {
+    color: '#64748b',
+    fontSize: '0.75rem',
+    display: 'flex',
+    alignItems: 'center',
+  },
+  noManager: {
+    color: '#ef4444',
+    fontWeight: 'bold',
+    fontSize: '0.8rem',
+    display: 'flex',
+    alignItems: 'center',
+  },
+  cardStatsSection: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderRadius: '8px',
+    padding: '12px 16px',
+    margin: '8px 0',
+    border: '1px dashed #e2e8f0',
+  },
+  statItem: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '2px',
+    flex: 1,
+  },
+  cardStatValue: {
+    fontSize: '0.95rem',
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  cardStatLabel: {
+    fontSize: '0.75rem',
+    color: '#64748b',
+    fontWeight: '700',
+  },
+  cardActions: {
+    display: 'flex',
+    gap: '8px',
+    flexWrap: 'wrap',
+    borderTop: '1px solid #f1f5f9',
+    paddingTop: '16px',
+    marginTop: 'auto',
+  },
+  cardActionBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    border: 'none',
+    padding: '6px 10px',
+    borderRadius: '6px',
+    fontSize: '0.7rem',
     fontWeight: '700',
     cursor: 'pointer',
     transition: 'all 0.2s',

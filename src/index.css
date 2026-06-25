@@ -3,20 +3,20 @@
 :root {
   --font-cairo: 'Cairo', sans-serif;
 
-  /* نظام الألوان: تدرجات الأخضر الزمردي والأزرق السماوي (النظام المضيء فقط) */
-  --bg-main: #f4f8f7; /* خلفية ناعمة مائلة للخضرة الخفيفة */
+  /* نظام الألوان: تدرجات البنفسجي والأزرق الملكي للأكاديمية */
+  --bg-main: #f8fafc; /* خلفية ناصعة مائلة للأزرق Slate-50 */
   --bg-sidebar: #ffffff;
   --bg-card: #ffffff;
-  --bg-card-hover: #fafdfc;
+  --bg-card-hover: #f1f5f9; /* Slate-100 */
   
-  --primary-green: #0d9488; /* أخضر زمردي teal-600 */
-  --primary-green-dark: #0f766e; /* أخضر زمردي غامق teal-700 */
-  --primary-green-light: #ccfbf1; /* أخضر فاتح teal-100 */
-  --primary-green-subtle: #f0fdfa; /* خلفية خضراء خفيفة جداً */
+  --primary-green: #4f46e5; /* بنفسجي نيلي Indigo-600 */
+  --primary-green-dark: #3730a3; /* بنفسجي غامق Indigo-800 */
+  --primary-green-light: #e0e7ff; /* بنفسجي فاتح Indigo-100 */
+  --primary-green-subtle: #f5f3ff; /* خلفية بنفسجية خفيفة Violet-50 */
   
-  --primary-blue: #0284c7; /* أزرق سماوي sky-600 */
-  --primary-blue-dark: #0369a1; /* أزرق غامق sky-700 */
-  --primary-blue-light: #e0f2fe; /* أزرق فاتح sky-100 */
+  --primary-blue: #0ea5e9; /* أزرق ملكي/سماوي Sky-500 */
+  --primary-blue-dark: #0284c7; /* أزرق غامق Sky-600 */
+  --primary-blue-light: #e0f2fe; /* أزرق فاتح Sky-100 */
   --primary-blue-subtle: #f0f9ff; /* خلفية زرقاء خفيفة جداً */
 
   /* ألوان الحالات والحدود */
@@ -899,6 +899,7 @@ button, input, select, textarea {
   .modal-close-btn,
   .modal-footer,
   .no-print,
+  .subscription-banner,
   .modal-overlay:not(.printable-invoice-wrapper):not(.printable-attendance-wrapper):not(.printable-schedule-wrapper) {
     display: none !important;
   }
@@ -1031,4 +1032,235 @@ button, input, select, textarea {
 .print-only {
   display: none !important;
 }
+
+/* شريط الاشتراك المميز في الأعلى */
+.subscription-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 12px 24px;
+  margin-bottom: 24px;
+  box-shadow: var(--shadow-sm);
+  font-family: var(--font-cairo), sans-serif;
+  direction: rtl;
+}
+
+.subscription-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.subscription-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.subscription-badge-unlimited {
+  display: flex;
+  align-items: center;
+  background-color: var(--primary-green-subtle);
+  color: var(--primary-green-dark);
+  padding: 6px 14px;
+  border-radius: var(--radius-full);
+  font-size: 0.85rem;
+  font-weight: 700;
+  border: 1px solid var(--primary-green-light);
+}
+
+.subscription-badge-trial {
+  display: flex;
+  align-items: center;
+  background-color: #fff7ed; /* برتقالي خفيف جداً */
+  color: #c2410c; /* برتقالي غامق */
+  padding: 6px 14px;
+  border-radius: var(--radius-full);
+  font-size: 0.85rem;
+  font-weight: 700;
+  border: 1px solid #ffedd5;
+  gap: 8px;
+}
+
+.pulse-dot {
+  width: 8px;
+  height: 8px;
+  background-color: #ea580c;
+  border-radius: 50%;
+  display: inline-block;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(234, 88, 12, 0.7);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 6px rgba(234, 88, 12, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(234, 88, 12, 0);
+  }
+}
+
+.association-meta {
+  font-size: 0.85rem;
+  color: var(--text-main);
+}
+
+/* --- نافذة سند القبض --- */
+.receipt-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(15, 23, 42, 0.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1100;
+  backdrop-filter: blur(4px);
+  direction: rtl;
+}
+
+.receipt-modal-content {
+  background-color: #ffffff;
+  border-radius: var(--radius-lg);
+  padding: 32px;
+  width: 100%;
+  max-width: 600px;
+  box-shadow: var(--shadow-lg);
+  position: relative;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.receipt-container {
+  border: 2px solid var(--primary-green);
+  border-radius: var(--radius-md);
+  padding: 24px;
+  background-color: #fafdfc;
+  background-image: radial-gradient(var(--primary-green-subtle) 1px, transparent 1px);
+  background-size: 20px 20px;
+  position: relative;
+}
+
+.receipt-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 2px double var(--primary-green-light);
+  padding-bottom: 16px;
+  margin-bottom: 20px;
+}
+
+.receipt-title {
+  text-align: center;
+  flex-grow: 1;
+}
+
+.receipt-title h3 {
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: var(--primary-green-dark);
+  margin: 0 0 4px 0;
+}
+
+.receipt-title p {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.receipt-meta {
+  font-size: 0.8rem;
+  color: var(--text-main);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+}
+
+.receipt-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  font-size: 0.95rem;
+  color: var(--text-main);
+  line-height: 1.6;
+}
+
+.receipt-row {
+  display: flex;
+  border-bottom: 1px dashed var(--border-color);
+  padding-bottom: 8px;
+}
+
+.receipt-label {
+  font-weight: 700;
+  color: var(--text-dark);
+  width: 130px;
+  flex-shrink: 0;
+}
+
+.receipt-value {
+  flex-grow: 1;
+}
+
+.receipt-amount-box {
+  background-color: var(--primary-green-light);
+  border: 1px solid var(--primary-green);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 800;
+  font-size: 1.1rem;
+  color: var(--primary-green-dark);
+  margin-top: 10px;
+}
+
+.receipt-signatures-box {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 40px;
+  text-align: center;
+  margin-top: 32px;
+  border-top: 1px solid var(--border-color);
+  padding-top: 16px;
+}
+
+.receipt-signature-line {
+  margin-top: 30px;
+  border-top: 1px dotted var(--text-light);
+  padding-top: 6px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+
+@media print {
+  /* تنسيق وضمان ظهور نافذة السند المالي المطبوع */
+  .receipt-print-window {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    padding: 20px !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+}
+
 

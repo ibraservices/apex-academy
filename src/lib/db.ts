@@ -42,6 +42,15 @@ export interface Teacher {
   created_at?: string;
 }
 
+export interface AcademicLevel {
+  id: string;
+  name: string; // اسم المستوى الدراسي (مثل: الأولى بكالوريا)
+  stage: 'primary' | 'middle' | 'high' | 'university' | 'other';
+  specializations: string[]; // مصفوفة التخصصات (مثل: ['علوم تجريبية', 'رياضيات']) أو ['عام']
+  association_id?: string;
+  created_at?: string;
+}
+
 export interface Group {
   id: string;
   name: string;
@@ -49,6 +58,8 @@ export interface Group {
   lesson_id: string;
   schedule: string; // الحصص والمواعيد
   gender_target: 'male' | 'female' | 'all'; // جنس المجموعة المستهدف
+  level_id?: string; // المستوى الأكاديمي المرتبط
+  specialization?: string; // التخصص المرتبط بالفوج
   association_id?: string;
   created_at?: string;
 }
@@ -56,11 +67,14 @@ export interface Group {
 export interface Student {
   id: string;
   name: string;
-  age: number;
-  birth_date: string;
-  gender: 'male' | 'female';
+  age?: number;
+  birth_date?: string;
+  gender?: 'male' | 'female';
   parent_name: string;
   parent_phone: string;
+  academic_level?: string; // المستوى الدراسي (يخزن معرف أو اسم المستوى)
+  specialization?: string; // التخصص الدراسي
+  registration_date?: string; // تاريخ التسجيل
   association_id?: string;
   created_at?: string;
 }
@@ -70,11 +84,34 @@ export interface Enrollment {
   student_id: string;
   group_id: string;
   lesson_id: string;
-  price: number; // ثمن الدرس
+  price: number; // ثمن المادة
   start_date: string; // تاريخ البداية
   end_date: string; // تاريخ النهاية (تلقائياً شهر)
-  payment_status?: 'paid' | 'partial' | 'unpaid'; // حالة الدفع
+  payment_status?: 'paid' | 'partial' | 'unpaid'; // حالة الدفع (الملغاة تدريجياً لصالح الفواتير)
   paid_amount?: number; // المبلغ المدفوع
+  notes?: string; // الملاحظات والتقييمات الدراسية للتلميذ في هذه المادة
+  association_id?: string;
+  created_at?: string;
+}
+
+export interface Invoice {
+  id: string;
+  student_id: string;
+  total_amount: number;
+  paid_amount: number;
+  payment_status: 'paid' | 'partial' | 'unpaid';
+  invoice_date: string;
+  due_date: string;
+  association_id?: string;
+  created_at?: string;
+}
+
+export interface InvoiceItem {
+  id: string;
+  invoice_id: string;
+  enrollment_id?: string | null;
+  description: string;
+  amount: number;
   association_id?: string;
   created_at?: string;
 }
@@ -104,7 +141,7 @@ export const supabase = isSupabaseConfigured
 // البيانات التجريبية الأولية (Mock Data)
 // ==========================================
 const defaultAssociations: Association[] = [
-  { id: 'assoc-1', name: 'جمعية الفرقان النموذجية', status: 'active' }
+  { id: 'assoc-1', name: 'أكاديمية أيبكس النموذجية', status: 'active' }
 ];
 
 const defaultProfiles: Profile[] = [
@@ -126,38 +163,60 @@ const defaultCredentials = [
 ];
 
 const defaultLessons: Lesson[] = [
-  { id: 'lesson-1', name: 'تحفيظ القرآن الكريم', description: 'حفظ ودراسة سور القرآن الكريم بالتكرار والمتابعة اليومية مع التجويد.', association_id: 'assoc-1' },
-  { id: 'lesson-2', name: 'التجويد وأحكام التلاوة', description: 'دراسة مخارج الحروف وقواعد التجويد النظري والتطبيق العملي.', association_id: 'assoc-1' }
+  { id: 'lesson-1', name: 'مادة الرياضيات', description: 'دعم دراسي مكثف في مادة الرياضيات لجميع المستويات الثانوية والتحضير للامتحانات.', association_id: 'assoc-1' },
+  { id: 'lesson-2', name: 'اللغة الإنجليزية', description: 'دروس تفاعلية لتعليم وتطوير المحادثة والقواعد للغة الإنجليزية للناشئين والكبار.', association_id: 'assoc-1' }
 ];
 
 const defaultTeachers: Teacher[] = [
-  { id: 'teacher-1', name: 'أ. محمد الأحمد', gender: 'male', salary_type: 'fixed', salary_value: 2000, phone: '0612345678', association_id: 'assoc-1' },
-  { id: 'teacher-2', name: 'أ. عائشة العمري', gender: 'female', salary_type: 'ratio', salary_value: 60, phone: '0698765432', association_id: 'assoc-1' } // 60% من اشتراكات طلابها
+  { id: 'teacher-1', name: 'أ. محمد الأحمد', gender: 'male', salary_type: 'fixed', salary_value: 2500, phone: '0612345678', association_id: 'assoc-1' },
+  { id: 'teacher-2', name: 'أ. عائشة العمري', gender: 'female', salary_type: 'ratio', salary_value: 60, phone: '0698765432', association_id: 'assoc-1' } // 60% من اشتراكات تلاميذها
 ];
 
 const defaultGroups: Group[] = [
-  { id: 'group-1', name: 'حلقة أبي بكر الصديق (ذكور)', teacher_id: 'teacher-1', lesson_id: 'lesson-1', schedule: 'السبت والاثنين والأربعاء - 17:00 إلى 19:00', gender_target: 'male', association_id: 'assoc-1' },
-  { id: 'group-2', name: 'حلقة خديجة بنت خويلد (إناث)', teacher_id: 'teacher-2', lesson_id: 'lesson-1', schedule: 'الأحد والثلاثاء والخميس - 16:00 إلى 18:00', gender_target: 'female', association_id: 'assoc-1' }
+  { id: 'group-1', name: 'فوج الرياضيات - المستوى الثانوي', teacher_id: 'teacher-1', lesson_id: 'lesson-1', schedule: 'السبت والاثنين والأربعاء - 17:00 إلى 19:00', gender_target: 'all', association_id: 'assoc-1' },
+  { id: 'group-2', name: 'فوج الإنجليزية - المحادثة الأساسية', teacher_id: 'teacher-2', lesson_id: 'lesson-2', schedule: 'الأحد والثلاثاء والخميس - 16:00 إلى 18:00', gender_target: 'all', association_id: 'assoc-1' }
 ];
 
 const defaultStudents: Student[] = [
-  { id: 'student-1', name: 'أحمد خالد', age: 10, birth_date: '2016-03-12', gender: 'male', parent_name: 'خالد محمود', parent_phone: '0611223344', association_id: 'assoc-1' },
-  { id: 'student-2', name: 'فاطمة محمد', age: 9, birth_date: '2017-08-25', gender: 'female', parent_name: 'محمد علي', parent_phone: '0655667788', association_id: 'assoc-1' },
-  { id: 'student-3', name: 'يوسف أحمد', age: 12, birth_date: '2014-01-05', gender: 'male', parent_name: 'أحمد حسن', parent_phone: '0677889900', association_id: 'assoc-1' },
-  { id: 'student-4', name: 'سارة يحيى', age: 11, birth_date: '2015-05-18', gender: 'female', parent_name: 'يحيى سعيد', parent_phone: '0688990011', association_id: 'assoc-1' }
+  { id: 'student-1', name: 'ياسين خالد', age: 16, birth_date: '2010-03-12', gender: 'male', parent_name: 'خالد محمود', parent_phone: '0611223344', academic_level: 'ثانوي', registration_date: '2026-06-01', association_id: 'assoc-1' },
+  { id: 'student-2', name: 'فاطمة الزهراء محمد', age: 14, birth_date: '2012-08-25', gender: 'female', parent_name: 'محمد علي', parent_phone: '0655667788', academic_level: 'متوسط', registration_date: '2026-06-05', association_id: 'assoc-1' },
+  { id: 'student-3', name: 'أنس أحمد', age: 15, birth_date: '2011-01-05', gender: 'male', parent_name: 'أحمد حسن', parent_phone: '0677889900', academic_level: 'متوسط', registration_date: '2026-06-01', association_id: 'assoc-1' },
+  { id: 'student-4', name: 'سارة يحيى', age: 17, birth_date: '2009-05-18', gender: 'female', parent_name: 'يحيى سعيد', parent_phone: '0688990011', academic_level: 'ثانوي', registration_date: '2026-06-07', association_id: 'assoc-1' }
 ];
 
 const defaultEnrollments: Enrollment[] = [
-  { id: 'enrollment-1', student_id: 'student-1', group_id: 'group-1', lesson_id: 'lesson-1', price: 150, start_date: '2026-06-01', end_date: '2026-07-01', payment_status: 'paid', paid_amount: 150, association_id: 'assoc-1' },
-  { id: 'enrollment-2', student_id: 'student-2', group_id: 'group-2', lesson_id: 'lesson-1', price: 200, start_date: '2026-06-05', end_date: '2026-07-05', payment_status: 'partial', paid_amount: 120, association_id: 'assoc-1' },
-  { id: 'enrollment-3', student_id: 'student-3', group_id: 'group-1', lesson_id: 'lesson-1', price: 150, start_date: '2026-06-01', end_date: '2026-07-01', payment_status: 'unpaid', paid_amount: 0, association_id: 'assoc-1' },
-  { id: 'enrollment-4', student_id: 'student-4', group_id: 'group-2', lesson_id: 'lesson-1', price: 200, start_date: '2026-06-07', end_date: '2026-07-07', payment_status: 'paid', paid_amount: 200, association_id: 'assoc-1' }
+  { id: 'enrollment-1', student_id: 'student-1', group_id: 'group-1', lesson_id: 'lesson-1', price: 300, start_date: '2026-06-01', end_date: '2026-07-01', payment_status: 'paid', paid_amount: 300, notes: 'مستواه ممتاز في الجبر، يحتاج للتركيز على الهندسة والتمارين التطبيقية.', association_id: 'assoc-1' },
+  { id: 'enrollment-2', student_id: 'student-2', group_id: 'group-2', lesson_id: 'lesson-2', price: 400, start_date: '2026-06-05', end_date: '2026-07-05', payment_status: 'partial', paid_amount: 250, notes: 'تفاعل ممتاز في المحادثة، النطق يتحسن بشكل ملحوظ والمشاركة نشطة.', association_id: 'assoc-1' },
+  { id: 'enrollment-3', student_id: 'student-3', group_id: 'group-1', lesson_id: 'lesson-1', price: 300, start_date: '2026-06-01', end_date: '2026-07-01', payment_status: 'unpaid', paid_amount: 0, notes: 'يحتاج لجهد إضافي في المعادلات من الدرجة الثانية وحل المسائل المنهجية.', association_id: 'assoc-1' },
+  { id: 'enrollment-4', student_id: 'student-4', group_id: 'group-2', lesson_id: 'lesson-2', price: 400, start_date: '2026-06-07', end_date: '2026-07-07', payment_status: 'paid', paid_amount: 400, notes: 'تلميذة مجتهدة جداً، تلتزم بكافة الواجبات الصفية وتشارك بذكاء.', association_id: 'assoc-1' }
+];
+
+const defaultInvoices: Invoice[] = [
+  { id: 'invoice-1', student_id: 'student-1', total_amount: 300, paid_amount: 300, payment_status: 'paid', invoice_date: '2026-06-01', due_date: '2026-07-01', association_id: 'assoc-1' },
+  { id: 'invoice-2', student_id: 'student-2', total_amount: 400, paid_amount: 250, payment_status: 'partial', invoice_date: '2026-06-05', due_date: '2026-07-05', association_id: 'assoc-1' },
+  { id: 'invoice-3', student_id: 'student-3', total_amount: 300, paid_amount: 0, payment_status: 'unpaid', invoice_date: '2026-06-01', due_date: '2026-07-01', association_id: 'assoc-1' },
+  { id: 'invoice-4', student_id: 'student-4', total_amount: 400, paid_amount: 400, payment_status: 'paid', invoice_date: '2026-06-07', due_date: '2026-07-07', association_id: 'assoc-1' }
+];
+
+const defaultInvoiceItems: InvoiceItem[] = [
+  { id: 'item-1', invoice_id: 'invoice-1', enrollment_id: 'enrollment-1', description: 'اشتراك مادة الرياضيات - فوج الرياضيات - المستوى الثانوي', amount: 300, association_id: 'assoc-1' },
+  { id: 'item-2', invoice_id: 'invoice-2', enrollment_id: 'enrollment-2', description: 'اشتراك اللغة الإنجليزية - فوج الإنجليزية - المحادثة الأساسية', amount: 400, association_id: 'assoc-1' },
+  { id: 'item-3', invoice_id: 'invoice-3', enrollment_id: 'enrollment-3', description: 'اشتراك مادة الرياضيات - فوج الرياضيات - المستوى الثانوي', amount: 300, association_id: 'assoc-1' },
+  { id: 'item-4', invoice_id: 'invoice-4', enrollment_id: 'enrollment-4', description: 'اشتراك اللغة الإنجليزية - فوج الإنجليزية - المحادثة الأساسية', amount: 400, association_id: 'assoc-1' }
 ];
 
 const defaultExpenses: Expense[] = [
-  { id: 'expense-1', title: 'كراء المقر الرئيسي للجمعية', amount: 1500, date: '2026-06-01', category: 'rent', description: 'كراء شهر يونيو 2026', association_id: 'assoc-1' },
-  { id: 'expense-2', title: 'فاتورة الكهرباء والماء', amount: 240, date: '2026-06-03', category: 'bills', description: 'مقر الجمعية', association_id: 'assoc-1' },
-  { id: 'expense-3', title: 'أدوات مكتبية وأوراق طباعة', amount: 180, date: '2026-06-05', category: 'supplies', description: 'أقلام وسبورة وورق A4', association_id: 'assoc-1' }
+  { id: 'expense-1', title: 'كراء مقر المركز الرئيسي', amount: 3000, date: '2026-06-01', category: 'rent', description: 'كراء المقر لشهر يونيو 2026', association_id: 'assoc-1' },
+  { id: 'expense-2', title: 'فاتورة الكهرباء والماء وإنترنت المركز', amount: 450, date: '2026-06-03', category: 'bills', description: 'مقر المركز الرئيسي', association_id: 'assoc-1' },
+  { id: 'expense-3', title: 'أقلام سبورة ومستلزمات دراسية للأستاذة', amount: 250, date: '2026-06-05', category: 'supplies', description: 'أوراق طباعة وأدوات كتابية للمركز', association_id: 'assoc-1' }
+];
+
+const defaultAcademicLevels: AcademicLevel[] = [
+  { id: 'level-1', name: 'الطور الابتدائي', stage: 'primary', specializations: ['عام'], association_id: 'assoc-1' },
+  { id: 'level-2', name: 'الطور المتوسط', stage: 'middle', specializations: ['عام'], association_id: 'assoc-1' },
+  { id: 'level-3', name: 'الأولى ثانوي', stage: 'high', specializations: ['جذع مشترك علوم وتكنولوجيا', 'جذع مشترك آداب'], association_id: 'assoc-1' },
+  { id: 'level-4', name: 'الثانية ثانوي', stage: 'high', specializations: ['علوم تجريبية', 'رياضيات', 'تقني رياضي', 'تسيير واقتصاد', 'آداب وفلسفة', 'لغات أجنبية'], association_id: 'assoc-1' },
+  { id: 'level-5', name: 'الثالثة ثانوي (بكالوريا)', stage: 'high', specializations: ['علوم تجريبية', 'رياضيات', 'تقني رياضي', 'تسيير واقتصاد', 'آداب وفلسفة', 'لغات أجنبية'], association_id: 'assoc-1' }
 ];
 
 // دالة مساعدة لتهيئة التخزين المحلي
@@ -186,8 +245,17 @@ const initLocalStorage = () => {
   if (!localStorage.getItem('quran_enrollments')) {
     localStorage.setItem('quran_enrollments', JSON.stringify(defaultEnrollments));
   }
+  if (!localStorage.getItem('quran_invoices')) {
+    localStorage.setItem('quran_invoices', JSON.stringify(defaultInvoices));
+  }
+  if (!localStorage.getItem('quran_invoice_items')) {
+    localStorage.setItem('quran_invoice_items', JSON.stringify(defaultInvoiceItems));
+  }
   if (!localStorage.getItem('quran_expenses')) {
     localStorage.setItem('quran_expenses', JSON.stringify(defaultExpenses));
+  }
+  if (!localStorage.getItem('quran_academic_levels')) {
+    localStorage.setItem('quran_academic_levels', JSON.stringify(defaultAcademicLevels));
   }
 };
 
@@ -305,9 +373,18 @@ export async function deleteAssociation(id: string): Promise<void> {
     
     const enrollments = getLocalData<Enrollment>('quran_enrollments');
     setLocalData('quran_enrollments', enrollments.filter(e => e.association_id !== id));
+
+    const invoices = getLocalData<Invoice>('quran_invoices');
+    setLocalData('quran_invoices', invoices.filter(i => i.association_id !== id));
+
+    const invoiceItems = getLocalData<InvoiceItem>('quran_invoice_items');
+    setLocalData('quran_invoice_items', invoiceItems.filter(ii => ii.association_id !== id));
     
     const expenses = getLocalData<Expense>('quran_expenses');
     setLocalData('quran_expenses', expenses.filter(e => e.association_id !== id));
+
+    const levels = getLocalData<AcademicLevel>('quran_academic_levels');
+    setLocalData('quran_academic_levels', levels.filter(l => l.association_id !== id));
   }
 }
 
@@ -695,6 +772,62 @@ export async function deleteStudent(id: string): Promise<void> {
 }
 
 // ==========================================
+// وظائف المستويات الدراسية والتخصصات (Academic Levels CRUD)
+// ==========================================
+export async function getAcademicLevels(): Promise<AcademicLevel[]> {
+  if (isSupabaseConfigured && supabase) {
+    const { data, error } = await supabase.from('academic_levels').select('*').order('name');
+    if (error) throw error;
+    return data || [];
+  } else {
+    const assocId = getProfileAssociationId();
+    const role = getProfileRole();
+    const all = getLocalData<AcademicLevel>('quran_academic_levels');
+    if (role === 'super_admin') return all;
+    return all.filter(l => l.association_id === assocId);
+  }
+}
+
+export async function saveAcademicLevel(level: Omit<AcademicLevel, 'id'> & { id?: string, association_id?: string }): Promise<AcademicLevel> {
+  const assocId = level.association_id || getProfileAssociationId() || '';
+  const dataToSave = { ...level, association_id: assocId };
+
+  if (isSupabaseConfigured && supabase) {
+    if (level.id) {
+      const { data, error } = await supabase.from('academic_levels').update(dataToSave).eq('id', level.id).select().single();
+      if (error) throw error;
+      return data;
+    } else {
+      const { data, error } = await supabase.from('academic_levels').insert(dataToSave).select().single();
+      if (error) throw error;
+      return data;
+    }
+  } else {
+    const levels = getLocalData<AcademicLevel>('quran_academic_levels');
+    if (level.id) {
+      const updated = levels.map(l => l.id === level.id ? { ...l, ...dataToSave } as AcademicLevel : l);
+      setLocalData('quran_academic_levels', updated);
+      return { ...dataToSave } as AcademicLevel;
+    } else {
+      const newLevel = { ...dataToSave, id: 'level-' + Date.now() } as AcademicLevel;
+      levels.push(newLevel);
+      setLocalData('quran_academic_levels', levels);
+      return newLevel;
+    }
+  }
+}
+
+export async function deleteAcademicLevel(id: string): Promise<void> {
+  if (isSupabaseConfigured && supabase) {
+    const { error } = await supabase.from('academic_levels').delete().eq('id', id);
+    if (error) throw error;
+  } else {
+    const levels = getLocalData<AcademicLevel>('quran_academic_levels');
+    setLocalData('quran_academic_levels', levels.filter(l => l.id !== id));
+  }
+}
+
+// ==========================================
 // وظائف الاشتراكات والتسجيلات (Enrollments CRUD)
 // ==========================================
 export async function getEnrollments(): Promise<Enrollment[]> {
@@ -826,5 +959,121 @@ export async function deleteExpense(id: string): Promise<void> {
   } else {
     const expenses = getLocalData<Expense>('quran_expenses');
     setLocalData('quran_expenses', expenses.filter(e => e.id !== id));
+  }
+}
+
+// ==========================================
+// وظائف الفواتير (Invoices CRUD)
+// ==========================================
+export async function getInvoices(): Promise<Invoice[]> {
+  if (isSupabaseConfigured && supabase) {
+    const { data, error } = await supabase.from('invoices').select('*').order('invoice_date', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  } else {
+    const assocId = getProfileAssociationId();
+    const role = getProfileRole();
+    const all = getLocalData<Invoice>('quran_invoices');
+    if (role === 'super_admin') return all;
+    return all.filter(i => i.association_id === assocId);
+  }
+}
+
+export async function saveInvoice(invoice: Omit<Invoice, 'id'> & { id?: string, association_id?: string }): Promise<Invoice> {
+  const assocId = invoice.association_id || getProfileAssociationId() || '';
+  const dataToSave = { ...invoice, association_id: assocId };
+
+  if (isSupabaseConfigured && supabase) {
+    if (invoice.id) {
+      const { data, error } = await supabase.from('invoices').update(dataToSave).eq('id', invoice.id).select().single();
+      if (error) throw error;
+      return data;
+    } else {
+      const { data, error } = await supabase.from('invoices').insert(dataToSave).select().single();
+      if (error) throw error;
+      return data;
+    }
+  } else {
+    const invoices = getLocalData<Invoice>('quran_invoices');
+    if (invoice.id) {
+      const updated = invoices.map(i => i.id === invoice.id ? { ...i, ...dataToSave } as Invoice : i);
+      setLocalData('quran_invoices', updated);
+      return { ...dataToSave } as Invoice;
+    } else {
+      const newInvoice = { ...dataToSave, id: 'invoice-' + Date.now() } as Invoice;
+      invoices.push(newInvoice);
+      setLocalData('quran_invoices', invoices);
+      return newInvoice;
+    }
+  }
+}
+
+export async function deleteInvoice(id: string): Promise<void> {
+  if (isSupabaseConfigured && supabase) {
+    const { error } = await supabase.from('invoices').delete().eq('id', id);
+    if (error) throw error;
+  } else {
+    const invoices = getLocalData<Invoice>('quran_invoices');
+    setLocalData('quran_invoices', invoices.filter(i => i.id !== id));
+    
+    // تنظيف البنود المرتبطة تلقائياً
+    const items = getLocalData<InvoiceItem>('quran_invoice_items');
+    setLocalData('quran_invoice_items', items.filter(ii => ii.invoice_id !== id));
+  }
+}
+
+// ==========================================
+// وظائف بنود الفواتير (Invoice Items CRUD)
+// ==========================================
+export async function getInvoiceItems(): Promise<InvoiceItem[]> {
+  if (isSupabaseConfigured && supabase) {
+    const { data, error } = await supabase.from('invoice_items').select('*');
+    if (error) throw error;
+    return data || [];
+  } else {
+    const assocId = getProfileAssociationId();
+    const role = getProfileRole();
+    const all = getLocalData<InvoiceItem>('quran_invoice_items');
+    if (role === 'super_admin') return all;
+    return all.filter(ii => ii.association_id === assocId);
+  }
+}
+
+export async function saveInvoiceItem(item: Omit<InvoiceItem, 'id'> & { id?: string, association_id?: string }): Promise<InvoiceItem> {
+  const assocId = item.association_id || getProfileAssociationId() || '';
+  const dataToSave = { ...item, association_id: assocId };
+
+  if (isSupabaseConfigured && supabase) {
+    if (item.id) {
+      const { data, error } = await supabase.from('invoice_items').update(dataToSave).eq('id', item.id).select().single();
+      if (error) throw error;
+      return data;
+    } else {
+      const { data, error } = await supabase.from('invoice_items').insert(dataToSave).select().single();
+      if (error) throw error;
+      return data;
+    }
+  } else {
+    const items = getLocalData<InvoiceItem>('quran_invoice_items');
+    if (item.id) {
+      const updated = items.map(ii => ii.id === item.id ? { ...ii, ...dataToSave } as InvoiceItem : ii);
+      setLocalData('quran_invoice_items', updated);
+      return { ...dataToSave } as InvoiceItem;
+    } else {
+      const newItem = { ...dataToSave, id: 'item-' + Date.now() } as InvoiceItem;
+      items.push(newItem);
+      setLocalData('quran_invoice_items', items);
+      return newItem;
+    }
+  }
+}
+
+export async function deleteInvoiceItem(id: string): Promise<void> {
+  if (isSupabaseConfigured && supabase) {
+    const { error } = await supabase.from('invoice_items').delete().eq('id', id);
+    if (error) throw error;
+  } else {
+    const items = getLocalData<InvoiceItem>('quran_invoice_items');
+    setLocalData('quran_invoice_items', items.filter(ii => ii.id !== id));
   }
 }

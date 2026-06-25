@@ -4,9 +4,10 @@ import { supabase, isSupabaseConfigured, mockLogin, type Profile } from '../lib/
 
 interface AuthManagerProps {
   onLoginSuccess: (profile: Profile) => void;
+  onBackToHome?: () => void;
 }
 
-export function AuthManager({ onLoginSuccess }: AuthManagerProps) {
+export function AuthManager({ onLoginSuccess, onBackToHome }: AuthManagerProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -80,7 +81,7 @@ export function AuthManager({ onLoginSuccess }: AuthManagerProps) {
             <Sparkles size={28} style={styles.logoIcon} />
           </div>
           <h1 style={styles.title}>بوابة الدخول الموحدة</h1>
-          <p style={styles.subtitle}>منصة الهداية لإدارة حلقات القرآن والجمعيات</p>
+          <p style={styles.subtitle}>منصة أيبكس للدعم الدراسي وتعليم اللغات</p>
         </div>
 
         {errorMessage && (
@@ -143,7 +144,16 @@ export function AuthManager({ onLoginSuccess }: AuthManagerProps) {
         </form>
 
         <div style={styles.footer}>
-          <p>بصفتك مديراً للجمعية، احصل على بيانات دخولك من مطور المنصة.</p>
+          <p>بصفتك مديراً للمركز، احصل على بيانات دخولك من مطور المنصة.</p>
+          {onBackToHome && (
+            <button
+              type="button"
+              onClick={onBackToHome}
+              style={styles.backToHomeBtn}
+            >
+              الرجوع للصفحة التعريفية
+            </button>
+          )}
           <p style={styles.devTag}>
             {!isSupabaseConfigured && '⚙️ وضع التخزين المحلي نشط للتجربة'}
           </p>
@@ -172,8 +182,8 @@ const styles: { [key: string]: React.CSSProperties } = {
     position: 'fixed',
     top: 0,
     left: 0,
-    backgroundColor: '#f4f8f7',
-    backgroundImage: 'radial-gradient(at 0% 0%, rgba(13, 148, 136, 0.05) 0px, transparent 50%), radial-gradient(at 100% 100%, rgba(2, 132, 199, 0.05) 0px, transparent 50%)',
+    backgroundColor: '#f8fafc',
+    backgroundImage: 'radial-gradient(at 0% 0%, rgba(79, 70, 229, 0.05) 0px, transparent 50%), radial-gradient(at 100% 100%, rgba(14, 165, 233, 0.05) 0px, transparent 50%)',
     zIndex: 9999,
     direction: 'rtl',
     fontFamily: 'Cairo, sans-serif',
@@ -184,7 +194,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     backgroundColor: '#ffffff',
     borderRadius: '16px',
     padding: '40px 32px',
-    boxShadow: '0 10px 25px -5px rgba(13, 148, 136, 0.08), 0 8px 10px -6px rgba(2, 132, 199, 0.05)',
+    boxShadow: '0 10px 25px -5px rgba(79, 70, 229, 0.08), 0 8px 10px -6px rgba(14, 165, 233, 0.05)',
     border: '1px solid #e2e8f0',
     display: 'flex',
     flexDirection: 'column',
@@ -200,13 +210,13 @@ const styles: { [key: string]: React.CSSProperties } = {
   logoContainer: {
     width: '56px',
     height: '56px',
-    background: 'linear-gradient(135deg, #0d9488, #0284c7)',
+    background: 'linear-gradient(135deg, #4f46e5, #0ea5e9)',
     borderRadius: '12px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     color: '#ffffff',
-    boxShadow: '0 4px 10px rgba(13, 148, 136, 0.2)',
+    boxShadow: '0 4px 10px rgba(79, 70, 229, 0.2)',
   },
   logoIcon: {
     color: '#ffffff',
@@ -214,7 +224,7 @@ const styles: { [key: string]: React.CSSProperties } = {
   title: {
     fontSize: '1.4rem',
     fontWeight: '800',
-    color: '#0f766e',
+    color: '#3730a3',
     margin: 0,
   },
   subtitle: {
@@ -275,7 +285,7 @@ const styles: { [key: string]: React.CSSProperties } = {
   submitBtn: {
     width: '100%',
     padding: '14px',
-    backgroundColor: '#0d9488',
+    backgroundColor: '#4f46e5',
     color: '#ffffff',
     border: 'none',
     borderRadius: '8px',
@@ -286,7 +296,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     alignItems: 'center',
     justifyContent: 'center',
     gap: '10px',
-    boxShadow: '0 4px 6px -1px rgba(13, 148, 136, 0.1), 0 2px 4px -1px rgba(13, 148, 136, 0.06)',
+    boxShadow: '0 4px 6px -1px rgba(79, 70, 229, 0.1), 0 2px 4px -1px rgba(79, 70, 229, 0.06)',
     transition: 'all 0.2s',
   },
   submitBtnDisabled: {
@@ -308,5 +318,17 @@ const styles: { [key: string]: React.CSSProperties } = {
     color: '#0284c7',
     fontWeight: 'bold',
     margin: 0,
+  },
+  backToHomeBtn: {
+    background: 'none',
+    border: 'none',
+    color: '#4f46e5',
+    cursor: 'pointer',
+    fontFamily: 'Cairo, sans-serif',
+    fontSize: '0.85rem',
+    fontWeight: '700',
+    marginTop: '6px',
+    textDecoration: 'underline',
+    transition: 'color 0.2s',
   },
 };

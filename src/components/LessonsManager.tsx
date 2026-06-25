@@ -43,7 +43,7 @@ export const LessonsManager = ({ lessons, onSave, onDelete }: LessonsManagerProp
   };
 
   const handleDelete = async (id: string) => {
-    if (window.confirm('هل أنت متأكد من حذف هذا الدرس؟ سيؤدي ذلك لحذف جميع الحلقات والاشتراكات المرتبطة به.')) {
+    if (window.confirm('هل أنت متأكد من حذف هذه المادة؟ سيؤدي ذلك لحذف جميع الأفواج والاشتراكات المرتبطة بها.')) {
       await onDelete(id);
     }
   };
@@ -52,24 +52,24 @@ export const LessonsManager = ({ lessons, onSave, onDelete }: LessonsManagerProp
     <div>
       <div className="page-header">
         <div className="page-title">
-          <h2>إدارة الدروس والمقررات</h2>
-          <p>إعداد وتعديل المقررات الدراسية المتاحة بالجمعية</p>
+          <h2>إدارة المواد الدراسية</h2>
+          <p>إعداد وتعديل المواد الدراسية المتاحة بالمركز</p>
         </div>
         <button className="btn btn-primary" onClick={handleOpenAddModal}>
           <Plus size={18} />
-          إضافة درس جديد
+          إضافة مادة دراسية جديدة
         </button>
       </div>
 
       {/* شريط البحث والتصفية */}
       <div className="filters-container">
         <div className="filter-group">
-          <label className="filter-label">البحث عن درس</label>
+          <label className="filter-label">البحث عن مادة</label>
           <div style={{ position: 'relative' }}>
             <input
               type="text"
               className="filter-input"
-              placeholder="ابحث باسم الدرس أو الوصف..."
+              placeholder="ابحث باسم المادة أو الوصف..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               style={{ width: '100%', paddingRight: '40px' }}
@@ -96,7 +96,7 @@ export const LessonsManager = ({ lessons, onSave, onDelete }: LessonsManagerProp
               
               <div className="card-body">
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', lineHeight: '1.6' }}>
-                  {lesson.description || 'لا يوجد وصف متاح لهذا الدرس حالياً.'}
+                  {lesson.description || 'لا يوجد وصف متاح لهذه المادة حالياً.'}
                 </p>
               </div>
 
@@ -124,8 +124,8 @@ export const LessonsManager = ({ lessons, onSave, onDelete }: LessonsManagerProp
       ) : (
         <div className="no-data-card">
           <FileText className="no-data-icon" size={48} />
-          <h4 className="no-data-text">لم يتم العثور على أي دروس</h4>
-          <p>جرب تغيير كلمة البحث أو أضف درساً جديداً للبدء.</p>
+          <h4 className="no-data-text">لم يتم العثور على أي مواد دراسية</h4>
+          <p>جرب تغيير كلمة البحث أو أضف مادة دراسية جديدة للبدء.</p>
         </div>
       )}
 
@@ -135,7 +135,7 @@ export const LessonsManager = ({ lessons, onSave, onDelete }: LessonsManagerProp
           <div className="modal-content">
             <div className="modal-header">
               <h3 className="modal-title">
-                {currentLesson.id ? 'تعديل بيانات الدرس' : 'إضافة درس جديد'}
+                {currentLesson.id ? 'تعديل بيانات المادة' : 'إضافة مادة دراسية جديدة'}
               </h3>
               <button className="modal-close-btn" onClick={handleCloseModal}>
                 <X size={20} />
@@ -146,23 +146,23 @@ export const LessonsManager = ({ lessons, onSave, onDelete }: LessonsManagerProp
               <div className="modal-body">
                 <div className="form-grid">
                   <div className="form-group">
-                    <label className="form-label">اسم الدرس *</label>
+                    <label className="form-label">اسم المادة الدراسية *</label>
                     <input
                       type="text"
                       className="form-input"
                       required
-                      placeholder="مثال: تحفيظ القرآن الكريم"
+                      placeholder="مثال: اللغة الإنجليزية"
                       value={currentLesson.name || ''}
                       onChange={(e) => setCurrentLesson({ ...currentLesson, name: e.target.value })}
                     />
                   </div>
                   
                   <div className="form-group">
-                    <label className="form-label">وصف الدرس</label>
+                    <label className="form-label">وصف المادة</label>
                     <textarea
                       className="form-input"
                       rows={4}
-                      placeholder="اكتب وصفاً للدرس، وأهدافه التعليمية..."
+                      placeholder="اكتب وصفاً للمادة، وأهدافها التعليمية..."
                       value={currentLesson.description || ''}
                       onChange={(e) => setCurrentLesson({ ...currentLesson, description: e.target.value })}
                       style={{ resize: 'vertical' }}

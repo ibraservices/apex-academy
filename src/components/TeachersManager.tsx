@@ -27,7 +27,35 @@ export const TeachersManager = ({
   const [printTeacherId, setPrintTeacherId] = useState<string | null>(null);
   const [showPrintDetails, setShowPrintDetails] = useState<boolean>(true);
 
-  // تصفية المدرسين
+  // تصفية الاشتراكات النشطة فقط وحساب المواعيد الحالية
+  const activeEnrollments = enrollments.filter(e => {
+    if (!e.end_date) return false;
+    const endDate = new Date(e.end_date);
+    const currentDate = new Date();
+    // إزالة الساعات للمقارنة الدقيقة بالتاريخ فقط
+    endDate.setHours(0, 0, 0, 0);
+    currentDate.setHours(0, 0, 0, 0);
+    return currentDate <= endDate;
+  });
+
+  const countTeacherInactiveStudents = (teacher: Teacher) => {
+    const teacherGroups = groups.filter(g => g.teacher_id === teacher.id);
+    const teacherGroupIds = teacherGroups.map(g => g.id);
+    const teacherEnrollments = enrollments.filter(e => teacherGroupIds.includes(e.group_id));
+    const activeStudentIds = new Set(
+      activeEnrollments
+        .filter(e => teacherGroupIds.includes(e.group_id))
+        .map(e => e.student_id)
+    );
+    const inactiveStudentIds = new Set(
+      teacherEnrollments
+        .filter(e => !activeStudentIds.has(e.student_id))
+        .map(e => e.student_id)
+    );
+    return inactiveStudentIds.size;
+  };
+
+  // تصفية الأساتذة
   const filteredTeachers = teachers.filter(teacher => {
     const matchesSearch = teacher.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           (teacher.phone && teacher.phone.includes(searchTerm));
@@ -61,7 +89,7 @@ export const TeachersManager = ({
   };
 
   const handleDelete = async (id: string) => {
-    if (window.confirm('هل أنت متأكد من حذف هذا المدرس؟ سيؤدي ذلك لحذف مجموعاته والاشتراكات التابعة لها.')) {
+    if (window.confirm('هل أنت متأكد من حذف هذا الأستاذ؟ سيؤدي ذلك لحذف أفواجه والاشتراكات التابعة لها.')) {
       await onDelete(id);
     }
   };
@@ -70,19 +98,19 @@ export const TeachersManager = ({
     <div>
       <div className="page-header">
         <div className="page-title">
-          <h2>إدارة المدرسين والمدرسات</h2>
-          <p>إدارة الطاقم التعليمي، الحصص، واحتساب الأجور الشهرية</p>
+          <h2>إدارة الأساتذة والأستاذات</h2>
+          <p>إدارة الطاقم التعليمي، الأفواج، واحتساب الأجور الشهرية</p>
         </div>
         <button className="btn btn-primary" onClick={handleOpenAddModal}>
           <Plus size={18} />
-          إضافة مدرس جديد
+          إضافة أستاذ جديد
         </button>
       </div>
 
       {/* شريط الفلاتر والبحث */}
       <div className="filters-container">
         <div className="filter-group" style={{ flexGrow: 2 }}>
-          <label className="filter-label">البحث عن مدرس</label>
+          <label className="filter-label">البحث عن أستاذ</label>
           <div style={{ position: 'relative' }}>
             <input
               type="text"
@@ -104,8 +132,8 @@ export const TeachersManager = ({
             onChange={(e) => setGenderFilter(e.target.value)}
           >
             <option value="all">الكل</option>
-            <option value="male">ذكور (المدرسين)</option>
-            <option value="female">إناث (المدرسات)</option>
+            <option value="male">ذكور (الأساتذة)</option>
+            <option value="female">إناث (الأستاذات)</option>
           </select>
         </div>
 
@@ -123,13 +151,13 @@ export const TeachersManager = ({
         </div>
       </div>
 
-      {/* عرض المدرسين */}
+      {/* عرض الأساتذة */}
       {filteredTeachers.length > 0 ? (
         <div className="cards-grid">
           {filteredTeachers.map(teacher => {
             const teacherGroups = groups.filter(g => g.teacher_id === teacher.id);
-            const studentCount = countTeacherStudents(teacher, enrollments, groups);
-            const calculatedSalary = calculateTeacherSalary(teacher, enrollments, groups);
+            const studentCount = countTeacherStudents(teacher, activeEnrollments, groups);
+            const calculatedSalary = calculateTeacherSalary(teacher, activeEnrollments, groups);
 
             return (
               <div key={teacher.id} className="card">
@@ -154,18 +182,27 @@ export const TeachersManager = ({
                       <span className="card-info-value">{teacher.phone || 'غير مسجل'}</span>
                     </div>
 
-                    <div className="card-info-item">
-                      <Users size={16} className="card-info-icon" />
-                      <span className="card-info-label">عدد الطلاب:</span>
-                      <span className="card-info-value" style={{ color: 'var(--primary-green)', fontWeight: 'bold' }}>
-                        {studentCount} طلاب
-                      </span>
+                    <div className="card-info-item" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '4px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Users size={16} className="card-info-icon" />
+                        <span className="card-info-label">التلاميذ والاشتراكات:</span>
+                      </div>
+                      <div style={{ display: 'flex', gap: '12px', paddingRight: '24px', marginTop: '2px', fontSize: '0.82rem' }}>
+                        <div>
+                          <span style={{ color: 'var(--text-muted)' }}>النشطين: </span>
+                          <span style={{ color: 'var(--primary-green)', fontWeight: 'bold' }}>{studentCount}</span>
+                        </div>
+                        <div>
+                          <span style={{ color: 'var(--text-muted)' }}>غير النشطين: </span>
+                          <span style={{ color: '#ef4444', fontWeight: 'bold' }}>{countTeacherInactiveStudents(teacher)}</span>
+                        </div>
+                      </div>
                     </div>
 
                     <div className="card-info-item" style={{ alignItems: 'flex-start' }}>
                       <Layers size={16} className="card-info-icon" style={{ marginTop: '4px' }} />
                       <div>
-                        <span className="card-info-label">المجموعات الحالية:</span>
+                        <span className="card-info-label">الأفواج الحالية:</span>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '6px' }}>
                           {teacherGroups.map(g => (
                             <span key={g.id} className="badge badge-blue" style={{ fontSize: '0.75rem', padding: '2px 8px' }}>
@@ -173,7 +210,7 @@ export const TeachersManager = ({
                             </span>
                           ))}
                           {teacherGroups.length === 0 && (
-                            <span className="card-info-value" style={{ color: 'var(--text-light)', fontSize: '0.85rem' }}>لا توجد مجموعات</span>
+                            <span className="card-info-value" style={{ color: 'var(--text-light)', fontSize: '0.85rem' }}>لا توجد أفواج</span>
                           )}
                         </div>
                       </div>
@@ -229,8 +266,8 @@ export const TeachersManager = ({
       ) : (
         <div className="no-data-card">
           <GraduationCap className="no-data-icon" size={48} />
-          <h4 className="no-data-text">لم يتم العثور على أي مدرسين</h4>
-          <p>جرب تعديل خيارات البحث أو أضف مدرساً جديداً للجمعية.</p>
+          <h4 className="no-data-text">لم يتم العثور على أي أساتذة</h4>
+          <p>جرب تعديل خيارات البحث أو أضف أستاذاً جديداً للمركز.</p>
         </div>
       )}
 
@@ -240,7 +277,7 @@ export const TeachersManager = ({
           <div className="modal-content">
             <div className="modal-header">
               <h3 className="modal-title">
-                {currentTeacher.id ? 'تعديل بيانات المدرس' : 'إضافة مدرس جديد'}
+                {currentTeacher.id ? 'تعديل بيانات الأستاذ' : 'إضافة أستاذ جديد'}
               </h3>
               <button className="modal-close-btn" onClick={handleCloseModal}>
                 <X size={20} />
@@ -256,7 +293,7 @@ export const TeachersManager = ({
                       type="text"
                       className="form-input"
                       required
-                      placeholder="اسم المدرس الثلاثي"
+                      placeholder="اسم الأستاذ الثلاثي"
                       value={currentTeacher.name || ''}
                       onChange={(e) => setCurrentTeacher({ ...currentTeacher, name: e.target.value })}
                     />
@@ -271,8 +308,8 @@ export const TeachersManager = ({
                         value={currentTeacher.gender || 'male'}
                         onChange={(e) => setCurrentTeacher({ ...currentTeacher, gender: e.target.value as 'male' | 'female' })}
                       >
-                        <option value="male">ذكر (مدرس)</option>
-                        <option value="female">أنثى (مدرسة)</option>
+                        <option value="male">ذكر (أستاذ)</option>
+                        <option value="female">أنثى (أستاذة)</option>
                       </select>
                     </div>
 
@@ -304,7 +341,7 @@ export const TeachersManager = ({
 
                     <div className="form-group">
                       <label className="form-label">
-                        {currentTeacher.salary_type === 'fixed' ? 'قيمة الراتب (بالدرهم) *' : 'النسبة المئوية (%) *'}
+                        {currentTeacher.salary_type === 'fixed' ? 'قيمة الأجر الشهري القار (بالدرهم) *' : 'النسبة المئوية (%) *'}
                       </label>
                       <input
                         type="number"
@@ -312,7 +349,7 @@ export const TeachersManager = ({
                         required
                         min="0"
                         max={currentTeacher.salary_type === 'ratio' ? '100' : undefined}
-                        placeholder={currentTeacher.salary_type === 'fixed' ? 'مثال: 2000' : 'مثال: 50'}
+                        placeholder={currentTeacher.salary_type === 'fixed' ? 'مثال: 2500' : 'مثال: 50'}
                         value={currentTeacher.salary_value !== undefined ? currentTeacher.salary_value : ''}
                         onChange={(e) => setCurrentTeacher({ ...currentTeacher, salary_value: Number(e.target.value) })}
                       />
@@ -341,15 +378,15 @@ export const TeachersManager = ({
 
           const teacherGroups = groups.filter(g => g.teacher_id === teacher.id);
           const teacherGroupIds = teacherGroups.map(g => g.id);
-          const teacherEnrollments = enrollments.filter(e => teacherGroupIds.includes(e.group_id));
-          const calculatedSalary = calculateTeacherSalary(teacher, enrollments, groups);
-          const totalStudents = countTeacherStudents(teacher, enrollments, groups);
+          const teacherEnrollments = activeEnrollments.filter(e => teacherGroupIds.includes(e.group_id));
+          const calculatedSalary = calculateTeacherSalary(teacher, activeEnrollments, groups);
+          const totalStudents = countTeacherStudents(teacher, activeEnrollments, groups);
 
           return (
             <div className="modal-overlay printable-invoice-wrapper">
               <div className="modal-content" style={{ maxWidth: '750px', width: '90%' }}>
                 <div className="modal-header">
-                  <h3 className="modal-title">كشف حساب أجر المدرس</h3>
+                  <h3 className="modal-title">كشف حساب أجر الأستاذ</h3>
                   <button className="modal-close-btn" onClick={() => setPrintTeacherId(null)}>
                     <X size={20} />
                   </button>
@@ -375,15 +412,15 @@ export const TeachersManager = ({
                       style={{ accentColor: 'var(--primary-green)', cursor: 'pointer', width: '16px', height: '16px' }}
                     />
                     <label htmlFor="toggle-print-details" style={{ fontSize: '0.85rem', fontWeight: 'bold', cursor: 'pointer', color: 'var(--text-dark)' }}>
-                      إظهار تفاصيل وأسماء الطلاب في كشف الحساب المطبوع
+                      إظهار تفاصيل وأسماء التلاميذ في كشف الحساب المطبوع
                     </label>
                   </div>
 
                   <div className="printable-invoice">
                     <div className="invoice-header">
                       <div>
-                        <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--primary-green-dark)' }}>جمعية الهداية التعليمية</h2>
-                        <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>لتحفيظ القرآن الكريم وتدريس العلوم الشرعية</p>
+                        <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--primary-green-dark)' }}>مركز أيبكس للدعم الدراسي</h2>
+                        <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>للدعم الدراسي وتعليم اللغات</p>
                       </div>
                       <div style={{ textAlign: 'left' }}>
                         <span className="badge badge-green" style={{ fontSize: '0.9rem', padding: '6px 12px' }}>كشف حساب الأجر</span>
@@ -393,23 +430,26 @@ export const TeachersManager = ({
 
                     <div className="invoice-details">
                       <div className="invoice-detail-item">
-                        <strong>اسم المدرس(ة):</strong> {teacher.name}
+                        <strong>اسم الأستاذ(ة):</strong> {teacher.name}
                       </div>
                       <div className="invoice-detail-item">
                         <strong>رقم الهاتف:</strong> {teacher.phone || 'غير مسجل'}
                       </div>
                       <div className="invoice-detail-item">
-                        <strong>نوع الحساب المالي:</strong> {teacher.salary_type === 'fixed' ? 'راتب قار' : `نسبة مئوية من الاشتراكات (${teacher.salary_value}%)`}
+                        <strong>نوع الحساب المالي:</strong> {teacher.salary_type === 'fixed' ? 'راتب شهري قار' : `نسبة مئوية من الاشتراكات (${teacher.salary_value}%)`}
                       </div>
                       <div className="invoice-detail-item">
-                        <strong>عدد الطلاب الفعلي:</strong> {totalStudents} طالب/ـة
+                        <strong>عدد التلاميذ النشطين:</strong> {totalStudents} تلميذ/ة
+                      </div>
+                      <div className="invoice-detail-item">
+                        <strong>عدد التلاميذ غير النشطين:</strong> {countTeacherInactiveStudents(teacher)} تلميذ/ة
                       </div>
                     </div>
 
                     {showPrintDetails && (
                       <>
                         <h4 style={{ fontSize: '0.95rem', fontWeight: 800, marginBottom: '10px', color: 'var(--text-dark)', borderRight: '3px solid var(--primary-green)', paddingRight: '8px' }}>
-                          تفاصيل الطلاب والاشتراكات المؤداة
+                          تفاصيل التلاميذ والاشتراكات المؤداة
                         </h4>
                         
                         <table className="invoice-table">
@@ -417,7 +457,7 @@ export const TeachersManager = ({
                             <tr>
                               <th>#</th>
                               <th>اسم التلميذ(ة)</th>
-                              <th>الحلقة / المجموعة</th>
+                              <th>الفوج / المادة</th>
                               <th>تاريخ بدء الاشتراك</th>
                               <th>ثمن الاشتراك المؤدى</th>
                             </tr>
@@ -429,8 +469,8 @@ export const TeachersManager = ({
                               return (
                                 <tr key={e.id}>
                                   <td>{index + 1}</td>
-                                  <td style={{ fontWeight: 'bold' }}>{student?.name || 'طالب محذوف'}</td>
-                                  <td>{group?.name || 'مجموعة محذوفة'}</td>
+                                  <td style={{ fontWeight: 'bold' }}>{student?.name || 'تلميذ محذوف'}</td>
+                                  <td>{group?.name || 'فوج محذوف'}</td>
                                   <td>{e.start_date}</td>
                                   <td>{e.price} د.م.</td>
                                 </tr>
@@ -439,7 +479,7 @@ export const TeachersManager = ({
                             {teacherEnrollments.length === 0 && (
                               <tr>
                                 <td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '20px' }}>
-                                  لا يوجد طلاب مسجلون باشتراكات نشطة حالياً مع هذا المدرس.
+                                  لا يوجد تلاميذ مسجلون باشتراكات نشطة حالياً مع هذا الأستاذ.
                                 </td>
                               </tr>
                             )}
@@ -453,11 +493,11 @@ export const TeachersManager = ({
                       {teacher.salary_type === 'ratio' && (
                         <>
                           <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', fontSize: '0.9rem', fontWeight: 'normal', color: 'var(--text-main)', borderBottom: '1px dashed #e2e8f0', paddingBottom: '6px' }}>
-                            <span>إجمالي مبالغ اشتراكات طلاب المعلم:</span>
+                            <span>إجمالي مبالغ اشتراكات تلاميذ الأستاذ:</span>
                             <strong style={{ color: 'var(--primary-blue-dark)' }}>{teacherEnrollments.reduce((sum, e) => sum + Number(e.price), 0)} د.م.</strong>
                           </div>
                           <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', fontSize: '0.9rem', fontWeight: 'normal', color: 'var(--text-main)', borderBottom: '1px dashed #e2e8f0', paddingBottom: '6px' }}>
-                            <span>نسبة المدرس المسجلة:</span>
+                            <span>نسبة الأستاذ المسجلة:</span>
                             <strong>{teacher.salary_value}%</strong>
                           </div>
                         </>
@@ -476,10 +516,10 @@ export const TeachersManager = ({
 
                     <div className="invoice-signatures">
                       <div className="invoice-signature-box">
-                        توقيع إدارة الجمعية
+                        توقيع إدارة المركز
                       </div>
                       <div className="invoice-signature-box">
-                        توقيع المدرس(ة)
+                        توقيع الأستاذ(ة)
                       </div>
                     </div>
                   </div>

@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Plus, Search, Edit2, Trash2, X, Layers, Calendar, BookOpen, UserCheck, AlertTriangle, Printer } from 'lucide-react';
-import { type Group, type Teacher, type Lesson, type Enrollment, type Student } from '../lib/db';
+import { type Group, type Teacher, type Lesson, type Enrollment, type Student, type AcademicLevel } from '../lib/db';
 
 interface GroupsManagerProps {
   groups: Group[];
@@ -8,6 +8,7 @@ interface GroupsManagerProps {
   lessons: Lesson[];
   enrollments: Enrollment[];
   students: Student[];
+  academicLevels: AcademicLevel[];
   onSave: (group: Omit<Group, 'id'> & { id?: string }) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
 }
@@ -18,6 +19,7 @@ export const GroupsManager = ({
   lessons,
   enrollments,
   students,
+  academicLevels,
   onSave,
   onDelete
 }: GroupsManagerProps) => {
@@ -25,13 +27,16 @@ export const GroupsManager = ({
   const [lessonFilter, setLessonFilter] = useState<string>('all');
   const [teacherFilter, setTeacherFilter] = useState<string>('all');
   const [genderFilter, setGenderFilter] = useState<string>('all');
+  const [levelFilter, setLevelFilter] = useState<string>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentGroup, setCurrentGroup] = useState<Partial<Group> | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [printGroupId, setPrintGroupId] = useState<string | null>(null);
   const [emptyRowsCount, setEmptyRowsCount] = useState<number>(10);
+  const [sessionPrintCount, setSessionPrintCount] = useState<number>(8);
   const [isPrintScheduleModalOpen, setIsPrintScheduleModalOpen] = useState(false);
   const [schedulePrintTeacherId, setSchedulePrintTeacherId] = useState<string>('all');
+  const [schedulePrintLevelId, setSchedulePrintLevelId] = useState<string>('all');
 
   // حالة لتسجيل الجدول المهيكل (يوم مع توقيته الخاص)
   interface DaySchedule {
@@ -43,18 +48,26 @@ export const GroupsManager = ({
 
   const allDays = ['السبت', 'الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'];
 
-  // تصفية المجموعات
+  // تصفية الأفواج
   const filteredGroups = groups.filter(group => {
     const matchesSearch = group.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           (group.schedule && group.schedule.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesLesson = lessonFilter === 'all' || group.lesson_id === lessonFilter;
     const matchesTeacher = teacherFilter === 'all' || group.teacher_id === teacherFilter;
-    const matchesGender = genderFilter === 'all' || group.gender_target === genderFilter;
+    const matchesGender = genderFilter === 'all' || 
+      (genderFilter === 'male' && group.gender_target === 'male') ||
+      (genderFilter === 'female' && group.gender_target === 'female') ||
+      (genderFilter === 'all_mixed' && group.gender_target === 'all');
+    const matchesLevel = levelFilter === 'all' || group.level_id === levelFilter;
 
-    return matchesSearch && matchesLesson && matchesTeacher && matchesGender;
+    return matchesSearch && matchesLesson && matchesTeacher && matchesGender && matchesLevel;
   });
 
   const handleOpenAddModal = () => {
+    if (teachers.length === 0 || lessons.length === 0) {
+      alert('يرجى إضافة أستاذ واحد ومادة دراسية واحدة على الأقل قبل إنشاء فوج جديد.');
+      return;
+    }
     setValidationError(null);
     setDaySchedules([]);
     setCurrentGroup({
@@ -62,14 +75,20 @@ export const GroupsManager = ({
       teacher_id: teachers[0]?.id || '',
       lesson_id: lessons[0]?.id || '',
       schedule: '',
-      gender_target: 'female'
+      gender_target: 'female',
+      level_id: academicLevels[0]?.id || '',
+      specialization: academicLevels[0]?.specializations[0] || 'عام'
     });
     setIsModalOpen(true);
   };
 
   const handleOpenEditModal = (group: Group) => {
     setValidationError(null);
-    setCurrentGroup(group);
+    setCurrentGroup({
+      ...group,
+      level_id: group.level_id || academicLevels[0]?.id || '',
+      specialization: group.specialization || 'عام'
+    });
 
     // محاولة تفكيك حقل الجدول النصي
     const scheduleStr = group.schedule || '';
@@ -148,9 +167,9 @@ export const GroupsManager = ({
     e.preventDefault();
     setValidationError(null);
 
-    const { name, teacher_id, lesson_id, gender_target } = currentGroup || {};
+    const { name, teacher_id, lesson_id, gender_target, level_id, specialization } = currentGroup || {};
 
-    if (!name?.trim() || !teacher_id || !lesson_id || !gender_target) {
+    if (!name?.trim() || !teacher_id || !lesson_id || !gender_target || !level_id || !specialization) {
       setValidationError('يرجى ملء جميع الحقول المطلوبة.');
       return;
     }
@@ -170,15 +189,15 @@ export const GroupsManager = ({
       schedule: scheduleString
     } as Group;
 
-    // التحقق من توافق جنس المدرس مع جنس المجموعة المستهدف
+    // التحقق من توافق جنس الأستاذ مع جنس الفوج المستهدف (فقط إذا لم يكن مختلطاً)
     const teacher = teachers.find(t => t.id === teacher_id);
-    if (teacher) {
+    if (teacher && gender_target !== 'all') {
       if (gender_target === 'female' && teacher.gender !== 'female') {
-        setValidationError('خطأ في المطابقة: المجموعة المخصصة للإناث يجب أن تقوم بتدريسها معلمة (أنثى).');
+        setValidationError('خطأ في المطابقة: الفوج المخصص للإناث يجب أن تقوم بتدريسه معلمة (أنثى).');
         return;
       }
       if (gender_target === 'male' && teacher.gender !== 'male') {
-        setValidationError('خطأ في المطابقة: المجموعة المخصصة للذكور يجب أن يقوم بتدريسها معلم (ذكر).');
+        setValidationError('خطأ في المطابقة: الفوج المخصص للذكور يجب أن يقوم بتدريسه معلم (ذكر).');
         return;
       }
     }
@@ -197,17 +216,17 @@ export const GroupsManager = ({
     <div>
       <div className="page-header">
         <div className="page-title">
-          <h2>إدارة المجموعات والحلقات</h2>
-          <p>تنظيم المجموعات وتحديد المدرسين ومواعيد الحصص الأسبوعية</p>
+          <h2>إدارة الأفواج الدراسية</h2>
+          <p>تنظيم الأفواج وتعيين الأساتذة ومواعيد الحصص الأسبوعية</p>
         </div>
         <div style={{ display: 'flex', gap: '10px' }}>
           <button className="btn btn-outline" onClick={() => setIsPrintScheduleModalOpen(true)}>
             <Printer size={18} style={{ marginLeft: '6px' }} />
             طباعة جدول الحصص
           </button>
-          <button className="btn btn-primary" onClick={handleOpenAddModal} disabled={teachers.length === 0 || lessons.length === 0}>
+          <button className="btn btn-primary" onClick={handleOpenAddModal}>
             <Plus size={18} />
-            إضافة مجموعة جديدة
+            إضافة فوج جديد
           </button>
         </div>
       </div>
@@ -215,12 +234,12 @@ export const GroupsManager = ({
       {/* شريط الفلاتر والبحث */}
       <div className="filters-container">
         <div className="filter-group" style={{ flexGrow: 2 }}>
-          <label className="filter-label">البحث عن مجموعة</label>
+          <label className="filter-label">البحث عن فوج</label>
           <div style={{ position: 'relative' }}>
             <input
               type="text"
               className="filter-input"
-              placeholder="ابحث باسم المجموعة أو المواعيد..."
+              placeholder="ابحث باسم الفوج أو المواعيد..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               style={{ width: '100%', paddingRight: '40px' }}
@@ -230,13 +249,13 @@ export const GroupsManager = ({
         </div>
 
         <div className="filter-group">
-          <label className="filter-label">حسب الدرس</label>
+          <label className="filter-label">حسب المادة</label>
           <select 
             className="filter-input" 
             value={lessonFilter}
             onChange={(e) => setLessonFilter(e.target.value)}
           >
-            <option value="all">كل الدروس</option>
+            <option value="all">كل المواد</option>
             {lessons.map(l => (
               <option key={l.id} value={l.id}>{l.name}</option>
             ))}
@@ -244,13 +263,13 @@ export const GroupsManager = ({
         </div>
 
         <div className="filter-group">
-          <label className="filter-label">حسب المدرس</label>
+          <label className="filter-label">حسب الأستاذ</label>
           <select 
             className="filter-input" 
             value={teacherFilter}
             onChange={(e) => setTeacherFilter(e.target.value)}
           >
-            <option value="all">كل المدرسين</option>
+            <option value="all">كل الأساتذة</option>
             {teachers.map(t => (
               <option key={t.id} value={t.id}>{t.name}</option>
             ))}
@@ -258,7 +277,21 @@ export const GroupsManager = ({
         </div>
 
         <div className="filter-group">
-          <label className="filter-label">فئة جنس المجموعة</label>
+          <label className="filter-label">حسب المستوى الدراسي</label>
+          <select 
+            className="filter-input" 
+            value={levelFilter}
+            onChange={(e) => setLevelFilter(e.target.value)}
+          >
+            <option value="all">كل المستويات</option>
+            {academicLevels.map(lvl => (
+              <option key={lvl.id} value={lvl.id}>{lvl.name}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="filter-group">
+          <label className="filter-label">فئة جنس الفوج</label>
           <select 
             className="filter-input" 
             value={genderFilter}
@@ -267,17 +300,19 @@ export const GroupsManager = ({
             <option value="all">الجميع</option>
             <option value="male">ذكور فقط</option>
             <option value="female">إناث فقط</option>
+            <option value="all_mixed">مختلط</option>
           </select>
         </div>
       </div>
 
-      {/* عرض المجموعات */}
+      {/* عرض الأفواج */}
       {filteredGroups.length > 0 ? (
         <div className="cards-grid">
           {filteredGroups.map(group => {
             const teacher = teachers.find(t => t.id === group.teacher_id);
             const lesson = lessons.find(l => l.id === group.lesson_id);
             const activeStudents = enrollments.filter(e => e.group_id === group.id).length;
+            const lvl = academicLevels.find(l => l.id === group.level_id);
 
             return (
               <div key={group.id} className="card">
@@ -285,10 +320,10 @@ export const GroupsManager = ({
                   <div>
                     <h3 className="card-title">{group.name}</h3>
                     <span 
-                      className={`badge ${group.gender_target === 'female' ? 'badge-green' : 'badge-blue'}`} 
+                      className={`badge ${group.gender_target === 'female' ? 'badge-green' : (group.gender_target === 'male' ? 'badge-blue' : 'badge-purple')}`} 
                       style={{ marginTop: '6px' }}
                     >
-                      {group.gender_target === 'female' ? 'حلقة إناث' : 'حلقة ذكور'}
+                      {group.gender_target === 'female' ? 'فوج إناث' : (group.gender_target === 'male' ? 'فوج ذكور' : 'فوج مختلط')}
                     </span>
                   </div>
                   <Layers size={24} style={{ color: 'var(--primary-blue)' }} />
@@ -298,14 +333,22 @@ export const GroupsManager = ({
                   <div className="card-info-list">
                     <div className="card-info-item">
                       <BookOpen size={16} className="card-info-icon" />
-                      <span className="card-info-label">الدرس:</span>
-                      <span className="card-info-value">{lesson?.name || 'مقرر محذوف'}</span>
+                      <span className="card-info-label">المادة:</span>
+                      <span className="card-info-value">{lesson?.name || 'مادة محذوفة'}</span>
+                    </div>
+
+                    <div className="card-info-item">
+                      <Layers size={16} className="card-info-icon" />
+                      <span className="card-info-label">المستوى والتخصص:</span>
+                      <span className="card-info-value">
+                        {lvl ? `${lvl.name} - ${group.specialization || 'عام'}` : 'عام / غير محدد'}
+                      </span>
                     </div>
 
                     <div className="card-info-item">
                       <UserCheck size={16} className="card-info-icon" />
-                      <span className="card-info-label">المدرس المسؤول:</span>
-                      <span className="card-info-value">{teacher?.name || 'معلم محذوف'}</span>
+                      <span className="card-info-label">الأستاذ المسؤول:</span>
+                      <span className="card-info-value">{teacher?.name || 'أستاذ محذوف'}</span>
                     </div>
 
                     <div className="card-info-item">
@@ -315,9 +358,9 @@ export const GroupsManager = ({
                     </div>
 
                     <div className="card-info-item" style={{ backgroundColor: 'var(--bg-main)', padding: '10px', borderRadius: '8px', marginTop: '10px' }}>
-                      <span className="card-info-label">عدد الطلاب المسجلين بالاشتراك:</span>
+                      <span className="card-info-label">عدد التلاميذ المسجلين بالاشتراك:</span>
                       <span className="card-info-value" style={{ color: 'var(--primary-green)', fontWeight: '800' }}>
-                        {activeStudents} طالب/ـة
+                        {activeStudents} تلميذ/ة
                       </span>
                     </div>
                   </div>
@@ -328,7 +371,11 @@ export const GroupsManager = ({
                     <button 
                       className="btn-icon-only" 
                       title="طباعة ورقة الحضور والغياب" 
-                      onClick={() => setPrintGroupId(group.id)}
+                      onClick={() => {
+                        const daysInWeek = allDays.filter(day => group.schedule.includes(day)).length;
+                        setSessionPrintCount((daysInWeek || 2) * 4);
+                        setPrintGroupId(group.id);
+                      }}
                       style={{ color: 'var(--primary-green)' }}
                     >
                       <Printer size={16} />
@@ -356,8 +403,8 @@ export const GroupsManager = ({
       ) : (
         <div className="no-data-card">
           <Layers className="no-data-icon" size={48} />
-          <h4 className="no-data-text">لم يتم العثور على أي مجموعات تعليمية</h4>
-          <p>يرجى تعديل فلاتر البحث أو التأكد من إدخال المدرسين والمقررات أولاً ثم إضافة مجموعة.</p>
+          <h4 className="no-data-text">لم يتم العثور على أي أفواج دراسية</h4>
+          <p>يرجى تعديل فلاتر البحث أو التأكد من إدخال الأساتذة والمواد الدراسية أولاً ثم إضافة فوج.</p>
         </div>
       )}
 
@@ -367,7 +414,7 @@ export const GroupsManager = ({
           <div className="modal-content">
             <div className="modal-header">
               <h3 className="modal-title">
-                {currentGroup.id ? 'تعديل بيانات المجموعة' : 'إنشاء مجموعة جديدة'}
+                {currentGroup.id ? 'تعديل بيانات الفوج' : 'إنشاء فوج جديد'}
               </h3>
               <button className="modal-close-btn" onClick={handleCloseModal}>
                 <X size={20} />
@@ -397,12 +444,12 @@ export const GroupsManager = ({
 
                 <div className="form-grid">
                   <div className="form-group">
-                    <label className="form-label">اسم المجموعة / الحلقة *</label>
+                    <label className="form-label">اسم الفوج الدراسي *</label>
                     <input
                       type="text"
                       className="form-input"
                       required
-                      placeholder="مثال: حلقة علي بن أبي طالب"
+                      placeholder="مثال: فوج الإنجليزية المبتدئ"
                       value={currentGroup.name || ''}
                       onChange={(e) => setCurrentGroup({ ...currentGroup, name: e.target.value })}
                     />
@@ -410,14 +457,14 @@ export const GroupsManager = ({
 
                   <div className="form-grid two-cols">
                     <div className="form-group">
-                      <label className="form-label">المقرر (الدرس) *</label>
+                      <label className="form-label">المادة الدراسية *</label>
                       <select
                         className="form-input"
                         required
                         value={currentGroup.lesson_id || ''}
                         onChange={(e) => setCurrentGroup({ ...currentGroup, lesson_id: e.target.value })}
                       >
-                        <option value="" disabled>اختر الدرس</option>
+                        <option value="" disabled>اختر المادة</option>
                         {lessons.map(l => (
                           <option key={l.id} value={l.id}>{l.name}</option>
                         ))}
@@ -425,28 +472,73 @@ export const GroupsManager = ({
                     </div>
 
                     <div className="form-group">
-                      <label className="form-label">فئة جنس المجموعة المستهدفة *</label>
+                      <label className="form-label">فئة جنس الفوج المستهدف *</label>
                       <select
                         className="form-input"
                         required
                         value={currentGroup.gender_target || 'female'}
-                        onChange={(e) => setCurrentGroup({ ...currentGroup, gender_target: e.target.value as 'male' | 'female' })}
+                        onChange={(e) => setCurrentGroup({ ...currentGroup, gender_target: e.target.value as any })}
                       >
-                        <option value="male">ذكور فقط (معلم ذكر)</option>
-                        <option value="female">إناث فقط (معلمة أنثى)</option>
+                        <option value="male">ذكور فقط (أستاذ ذكر)</option>
+                        <option value="female">إناث فقط (أستاذة أنثى)</option>
+                        <option value="all">مختلط (أي أستاذ)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="form-grid two-cols">
+                    <div className="form-group">
+                      <label className="form-label">المستوى الدراسي للفوج *</label>
+                      <select
+                        className="form-input"
+                        required
+                        value={currentGroup.level_id || ''}
+                        onChange={(e) => {
+                          const lvlId = e.target.value;
+                          const lvl = academicLevels.find(l => l.id === lvlId);
+                          setCurrentGroup({ 
+                            ...currentGroup, 
+                            level_id: lvlId,
+                            specialization: lvl && lvl.specializations ? lvl.specializations[0] : 'عام'
+                          });
+                        }}
+                      >
+                        <option value="" disabled>اختر المستوى</option>
+                        {academicLevels.map(lvl => (
+                          <option key={lvl.id} value={lvl.id}>{lvl.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">التخصص الدراسي للفوج *</label>
+                      <select
+                        className="form-input"
+                        required
+                        value={currentGroup.specialization || 'عام'}
+                        onChange={(e) => setCurrentGroup({ ...currentGroup, specialization: e.target.value })}
+                        disabled={!currentGroup.level_id}
+                      >
+                        {(() => {
+                          const selectedLvl = academicLevels.find(l => l.id === currentGroup.level_id);
+                          const specs = selectedLvl?.specializations || ['عام'];
+                          return specs.map(spec => (
+                            <option key={spec} value={spec}>{spec}</option>
+                          ));
+                        })()}
                       </select>
                     </div>
                   </div>
 
                   <div className="form-group">
-                    <label className="form-label">المدرس المسؤول *</label>
+                    <label className="form-label">الأستاذ المسؤول *</label>
                     <select
                       className="form-input"
                       required
                       value={currentGroup.teacher_id || ''}
                       onChange={(e) => setCurrentGroup({ ...currentGroup, teacher_id: e.target.value })}
                     >
-                      <option value="" disabled>اختر المدرس</option>
+                      <option value="" disabled>اختر الأستاذ</option>
                       {teachers.map(t => (
                         <option key={t.id} value={t.id}>
                           {t.name} ({t.gender === 'male' ? 'أستاذ' : 'أستاذة'})
@@ -454,7 +546,7 @@ export const GroupsManager = ({
                       ))}
                     </select>
                     <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                      ملاحظة: المدرس يجب أن يطابق الجنس المختار للمجموعة.
+                      ملاحظة: الأستاذ يجب أن يطابق الجنس المختار للفوج (في حال لم يكن الفوج مختلطاً).
                     </p>
                   </div>
 
@@ -573,9 +665,7 @@ export const GroupsManager = ({
             .filter(s => groupEnrollments.some(e => e.student_id === s.id))
             .sort((a, b) => a.name.localeCompare(b.name, 'ar'));
 
-          // حساب عدد الحصص الشهرية (عدد أيام الأسبوع المحددة × 4 أسابيع)
-          const daysInWeek = allDays.filter(day => group.schedule.includes(day)).length;
-          const sessionCount = (daysInWeek || 2) * 4;
+          const sessionCount = sessionPrintCount;
 
           return (
             <div className="modal-overlay printable-attendance-wrapper">
@@ -588,37 +678,56 @@ export const GroupsManager = ({
                 </div>
                 
                 <div className="modal-body">
-                  {/* أداة التحكم بعدد الأسطر الفارغة المضافة للجدول - تخفى أثناء الطباعة */}
+                  {/* أداة التحكم بعدد الأسطر والحصص المضافة للجدول - تخفى أثناء الطباعة */}
                   <div className="no-print" style={{ 
                     marginBottom: '20px', 
                     display: 'flex', 
+                    flexWrap: 'wrap',
                     alignItems: 'center', 
-                    gap: '12px', 
+                    gap: '24px', 
                     backgroundColor: 'var(--bg-main)', 
                     padding: '12px 16px', 
                     borderRadius: '8px',
                     border: '1px solid var(--border-color)'
                   }}>
-                    <label htmlFor="empty-rows-input" style={{ fontSize: '0.85rem', fontWeight: 'bold', color: 'var(--text-dark)' }}>
-                      عدد الأسطر الفارغة الإضافية في ورقة الحضور:
-                    </label>
-                    <input
-                      id="empty-rows-input"
-                      type="number"
-                      min="0"
-                      max="50"
-                      value={emptyRowsCount}
-                      onChange={(e) => setEmptyRowsCount(Math.max(0, parseInt(e.target.value) || 0))}
-                      className="form-input"
-                      style={{ width: '80px', padding: '6px 12px', fontSize: '0.85rem' }}
-                    />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <label htmlFor="empty-rows-input" style={{ fontSize: '0.85rem', fontWeight: 'bold', color: 'var(--text-dark)' }}>
+                        عدد الأسطر الفارغة الإضافية:
+                      </label>
+                      <input
+                        id="empty-rows-input"
+                        type="number"
+                        min="0"
+                        max="50"
+                        value={emptyRowsCount}
+                        onChange={(e) => setEmptyRowsCount(Math.max(0, parseInt(e.target.value) || 0))}
+                        className="form-input"
+                        style={{ width: '80px', padding: '6px 12px', fontSize: '0.85rem' }}
+                      />
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <label htmlFor="session-count-input" style={{ fontSize: '0.85rem', fontWeight: 'bold', color: 'var(--text-dark)' }}>
+                        عدد حصص ورقة الحضور (الأعمدة):
+                      </label>
+                      <input
+                        id="session-count-input"
+                        type="number"
+                        min="1"
+                        max="31"
+                        value={sessionPrintCount}
+                        onChange={(e) => setSessionPrintCount(Math.max(1, parseInt(e.target.value) || 1))}
+                        className="form-input"
+                        style={{ width: '80px', padding: '6px 12px', fontSize: '0.85rem' }}
+                      />
+                    </div>
                   </div>
 
                   <div className="printable-attendance">
                     <div className="attendance-print-header" style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid var(--primary-green)', paddingBottom: '16px', marginBottom: '24px' }}>
                       <div>
-                        <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--primary-green-dark)' }}>جمعية الهداية التعليمية</h2>
-                        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>لتحفيظ القرآن الكريم وتدريس العلوم الشرعية</p>
+                        <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--primary-green-dark)' }}>مركز أيبكس للدعم الدراسي</h2>
+                        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>للدعم الدراسي وتعليم اللغات</p>
                       </div>
                       <div style={{ textAlign: 'left' }}>
                         <span className="badge badge-green" style={{ fontSize: '0.95rem', padding: '6px 12px' }}>ورقة الحضور والغياب الشهرية</span>
@@ -636,19 +745,22 @@ export const GroupsManager = ({
                       padding: '10px 15px', 
                       borderRadius: '6px', 
                       border: '1px solid var(--border-color)',
-                      fontSize: '0.8rem'
+                      fontSize: '0.85rem'
                     }}>
                       <div className="attendance-info-item">
-                        <strong>المجموعة:</strong> {group.name}
+                        <strong>الشهر:</strong> <span style={{ borderBottom: '1px dotted #000', width: '80px', display: 'inline-block', marginRight: '4px' }}></span>
                       </div>
                       <div className="attendance-info-item">
-                        <strong>المدرس:</strong> {teacher?.name || 'غير محدد'}
+                        <strong>الأستاذ:</strong> {teacher?.name || 'غير محدد'}
                       </div>
                       <div className="attendance-info-item">
-                        <strong>المقرر:</strong> {lesson?.name || 'غير محدد'}
+                        <strong>مستوى وتخصص:</strong> {(() => {
+                          const lvl = academicLevels.find(l => l.id === group.level_id);
+                          return lvl ? `${lvl.name} - ${group.specialization || 'عام'}` : 'عام / غير محدد';
+                        })()}
                       </div>
                       <div className="attendance-info-item">
-                        <strong>الشهر:</strong> <span style={{ borderBottom: '1px dotted #000', width: '100px', display: 'inline-block' }}></span>
+                        <strong>الفوج:</strong> {group.name} {lesson ? `(${lesson.name})` : ''}
                       </div>
                     </div>
 
@@ -708,7 +820,7 @@ export const GroupsManager = ({
 
                     <div className="attendance-print-notes" style={{ marginTop: '30px', fontSize: '0.8rem', color: 'var(--text-muted)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div>* يرجى كتابة تاريخ الحصة باليوم والشهر في المربع العلوي لكل حصة (مثال: 15/06).</div>
-                      <div>توقيع المدرس(ة): ............................</div>
+                      <div>توقيع الأستاذ(ة): ............................</div>
                     </div>
                   </div>
                 </div>
@@ -752,31 +864,51 @@ export const GroupsManager = ({
                 border: '1px solid var(--border-color)',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '12px'
+                gap: '16px',
+                flexWrap: 'wrap'
               }}>
-                <label style={{ fontSize: '0.85rem', fontWeight: 'bold', color: 'var(--text-dark)' }}>
-                  عرض وتحديد الحصص لـ:
-                </label>
-                <select
-                  value={schedulePrintTeacherId}
-                  onChange={(e) => setSchedulePrintTeacherId(e.target.value)}
-                  className="form-input"
-                  style={{ width: '250px', padding: '6px 12px', fontSize: '0.85rem' }}
-                >
-                  <option value="all">جميع المجموعات والمعلمين</option>
-                  {teachers.map(t => (
-                    <option key={t.id} value={t.id}>
-                      مجموعات {t.name} ({t.gender === 'male' ? 'أستاذ' : 'أستاذة'})
-                    </option>
-                  ))}
-                </select>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <label style={{ fontSize: '0.85rem', fontWeight: 'bold', color: 'var(--text-dark)', whiteSpace: 'nowrap' }}>
+                    عرض الحصص حسب الأستاذ:
+                  </label>
+                  <select
+                    value={schedulePrintTeacherId}
+                    onChange={(e) => setSchedulePrintTeacherId(e.target.value)}
+                    className="form-input"
+                    style={{ width: '200px', padding: '6px 12px', fontSize: '0.85rem' }}
+                  >
+                    <option value="all">جميع الأفواج والأساتذة</option>
+                    {teachers.map(t => (
+                      <option key={t.id} value={t.id}>
+                        أفواج {t.name} ({t.gender === 'male' ? 'أستاذ' : 'أستاذة'})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <label style={{ fontSize: '0.85rem', fontWeight: 'bold', color: 'var(--text-dark)', whiteSpace: 'nowrap' }}>
+                    حسب المستوى الدراسي:
+                  </label>
+                  <select
+                    value={schedulePrintLevelId}
+                    onChange={(e) => setSchedulePrintLevelId(e.target.value)}
+                    className="form-input"
+                    style={{ width: '200px', padding: '6px 12px', fontSize: '0.85rem' }}
+                  >
+                    <option value="all">جميع المستويات</option>
+                    {academicLevels.map(lvl => (
+                      <option key={lvl.id} value={lvl.id}>{lvl.name}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               <div className="printable-schedule">
                 <div className="attendance-print-header" style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid var(--primary-green)', paddingBottom: '16px', marginBottom: '24px' }}>
                   <div>
-                    <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--primary-green-dark)' }}>جمعية الهداية التعليمية</h2>
-                    <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>لتحفيظ القرآن الكريم وتدريس العلوم الشرعية</p>
+                    <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--primary-green-dark)' }}>مركز أيبكس للدعم الدراسي</h2>
+                    <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>للدعم الدراسي وتعليم اللغات</p>
                   </div>
                   <div style={{ textAlign: 'left' }}>
                     <span className="badge badge-green" style={{ fontSize: '0.95rem', padding: '6px 12px' }}>جدول مواعيد الحصص الأسبوعية</span>
@@ -793,10 +925,11 @@ export const GroupsManager = ({
                 <table className="attendance-print-table" style={{ width: '100%', borderCollapse: 'collapse', marginTop: '10px' }}>
                   <thead>
                     <tr>
-                      <th style={{ border: '1px solid #cbd5e1', padding: '10px', backgroundColor: '#f8fafc', fontWeight: 'bold', textAlign: 'right' }}>المجموعة</th>
-                      <th style={{ border: '1px solid #cbd5e1', padding: '10px', backgroundColor: '#f8fafc', fontWeight: 'bold', textAlign: 'right' }}>المقرر</th>
+                      <th style={{ border: '1px solid #cbd5e1', padding: '10px', backgroundColor: '#f8fafc', fontWeight: 'bold', textAlign: 'right' }}>الفوج</th>
+                      <th style={{ border: '1px solid #cbd5e1', padding: '10px', backgroundColor: '#f8fafc', fontWeight: 'bold', textAlign: 'right' }}>المستوى والتخصص</th>
+                      <th style={{ border: '1px solid #cbd5e1', padding: '10px', backgroundColor: '#f8fafc', fontWeight: 'bold', textAlign: 'right' }}>المادة</th>
                       {schedulePrintTeacherId === 'all' && (
-                        <th style={{ border: '1px solid #cbd5e1', padding: '10px', backgroundColor: '#f8fafc', fontWeight: 'bold', textAlign: 'right' }}>المدرس</th>
+                        <th style={{ border: '1px solid #cbd5e1', padding: '10px', backgroundColor: '#f8fafc', fontWeight: 'bold', textAlign: 'right' }}>الأستاذ</th>
                       )}
                       <th style={{ border: '1px solid #cbd5e1', padding: '10px', backgroundColor: '#f8fafc', fontWeight: 'bold', textAlign: 'right' }}>المواعيد وحصص الأسبوع</th>
                     </tr>
@@ -804,25 +937,30 @@ export const GroupsManager = ({
                   <tbody>
                     {groups
                       .filter(g => schedulePrintTeacherId === 'all' || g.teacher_id === schedulePrintTeacherId)
+                      .filter(g => schedulePrintLevelId === 'all' || g.level_id === schedulePrintLevelId)
                       .sort((a, b) => a.name.localeCompare(b.name, 'ar'))
                       .map(group => {
                         const teacher = teachers.find(t => t.id === group.teacher_id);
                         const lesson = lessons.find(l => l.id === group.lesson_id);
+                        const lvl = academicLevels.find(l => l.id === group.level_id);
                         return (
                           <tr key={group.id}>
                             <td style={{ border: '1px solid #cbd5e1', padding: '10px', fontWeight: 'bold' }}>{group.name}</td>
-                            <td style={{ border: '1px solid #cbd5e1', padding: '10px' }}>{lesson?.name || 'مقرر محذوف'}</td>
+                            <td style={{ border: '1px solid #cbd5e1', padding: '10px' }}>
+                              {lvl ? `${lvl.name} - ${group.specialization || 'عام'}` : 'عام / غير محدد'}
+                            </td>
+                            <td style={{ border: '1px solid #cbd5e1', padding: '10px' }}>{lesson?.name || 'مادة محذوفة'}</td>
                             {schedulePrintTeacherId === 'all' && (
-                              <td style={{ border: '1px solid #cbd5e1', padding: '10px' }}>{teacher?.name || 'مدرس محذوف'}</td>
+                              <td style={{ border: '1px solid #cbd5e1', padding: '10px' }}>{teacher?.name || 'أستاذ محذوف'}</td>
                             )}
                             <td style={{ border: '1px solid #cbd5e1', padding: '10px', fontWeight: 500, color: 'var(--primary-green-dark)' }}>{group.schedule}</td>
                           </tr>
                         );
                       })}
-                    {groups.filter(g => schedulePrintTeacherId === 'all' || g.teacher_id === schedulePrintTeacherId).length === 0 && (
+                    {groups.filter(g => (schedulePrintTeacherId === 'all' || g.teacher_id === schedulePrintTeacherId) && (schedulePrintLevelId === 'all' || g.level_id === schedulePrintLevelId)).length === 0 && (
                       <tr>
-                        <td colSpan={schedulePrintTeacherId === 'all' ? 4 : 3} style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)', border: '1px solid #cbd5e1' }}>
-                          لا توجد مجموعات مسجلة لهذا المدرس حالياً.
+                        <td colSpan={schedulePrintTeacherId === 'all' ? 5 : 4} style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)', border: '1px solid #cbd5e1' }}>
+                          لا توجد أفواج مطابقة لمعايير التصفية حالياً.
                         </td>
                       </tr>
                     )}
@@ -835,6 +973,7 @@ export const GroupsManager = ({
               <button type="button" className="btn btn-outline" onClick={() => {
                 setIsPrintScheduleModalOpen(false);
                 setSchedulePrintTeacherId('all');
+                setSchedulePrintLevelId('all');
               }}>
                 إغلاق
               </button>
