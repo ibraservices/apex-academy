@@ -388,7 +388,7 @@ export const GroupsManager = ({
       {/* نافذة الإضافة والتعديل */}
       {isModalOpen && currentGroup && (
         <div className="modal-overlay">
-          <div className="modal-content">
+          <div className="modal-content" style={{ maxWidth: '650px', width: '95%' }}>
             <div className="modal-header">
               <h3 className="modal-title">
                 {currentGroup.id ? 'تعديل بيانات الفوج' : 'إنشاء فوج جديد'}
@@ -513,9 +513,6 @@ export const GroupsManager = ({
                         </option>
                       ))}
                     </select>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                      ملاحظة: الأستاذ يجب أن يطابق الجنس المختار للفوج (في حال لم يكن الفوج مختلطاً).
-                    </p>
                   </div>
 
                   <div className="form-group">

@@ -706,6 +706,9 @@ button, input, select, textarea {
   border-radius: var(--radius-md);
   font-size: 0.95rem;
   transition: var(--transition-fast);
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .form-input:focus {
