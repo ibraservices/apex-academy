@@ -1080,11 +1080,39 @@ export async function deleteInvoiceItem(id: string): Promise<void> {
 
 export async function initializeDefaultData(associationId: string): Promise<void> {
   const defaultLevels: Omit<AcademicLevel, 'id'>[] = [
-    { name: 'التعليم الابتدائي', stage: 'primary', specializations: ['الأول ابتدائي', 'الثاني ابتدائي', 'الثالث ابتدائي', 'الرابع ابتدائي', 'الخامس ابتدائي', 'السادس ابتدائي'], association_id: associationId },
-    { name: 'التعليم الثانوي الإعدادي', stage: 'middle', specializations: ['الأولى إعدادي', 'الثانية إعدادي', 'الثالثة إعدادي'], association_id: associationId },
-    { name: 'الجذع المشترك', stage: 'high', specializations: ['جذع مشترك علمي', 'جذع مشترك تكنولوجي', 'جذع مشترك آداب وعلوم إنسانية', 'جذع مشترك التعليم الأصيل'], association_id: associationId },
-    { name: 'الأولى بكالوريا', stage: 'high', specializations: ['علوم تجريبية', 'علوم رياضية', 'علوم تكنولوجية', 'آداب وعلوم إنسانية', 'علوم اقتصادية وتدبير', 'التعليم الأصيل'], association_id: associationId },
-    { name: 'الثانية بكالوريا (الوطني)', stage: 'high', specializations: ['مسلك العلوم الفيزيائية', 'مسلك علوم الحياة والأرض', 'مسلك العلوم الرياضية (أ)', 'مسلك العلوم الرياضية (ب)', 'مسلك الآداب', 'مسلك العلوم الإنسانية', 'مسلك العلوم الاقتصادية', 'مسلك علوم التدبير المحاسباتي'], association_id: associationId }
+    { 
+      name: 'التعليم الابتدائي', 
+      stage: 'primary', 
+      specializations: [
+        'المستوى الأول ابتدائي', 
+        'المستوى الثاني ابتدائي', 
+        'المستوى الثالث ابتدائي', 
+        'المستوى الرابع ابتدائي', 
+        'المستوى الخامس ابتدائي', 
+        'المستوى السادس ابتدائي (سنة إشهادية)'
+      ], 
+      association_id: associationId 
+    },
+    { 
+      name: 'التعليم الثانوي الإعدادي', 
+      stage: 'middle', 
+      specializations: [
+        'السنة الأولى إعدادي', 
+        'السنة الثانية إعدادي', 
+        'السنة الثالثة إعدادي (سنة إشهادية يتم فيها التوجيه لاختيار التخصص في المرحلة التأهيلية)'
+      ], 
+      association_id: associationId 
+    },
+    { 
+      name: 'التعليم الثانوي التأهيلي', 
+      stage: 'high', 
+      specializations: [
+        'الجذع المشترك: سنة تخصص أولي (يختار فيها التلميذ بين مسالك مثل: الآداب والعلوم الإنسانية، العلوم، التكنولوجيا، التعليم الأصيل)', 
+        'السنة الأولى باكالوريا: يدرس فيها التلميذ مواد تخصصه، ويجتاز في نهايتها الامتحان الجهوي الموحد', 
+        'السنة الثانية باكالوريا: ختام المسار المدرسي، ويجتاز فيها التلميذ الامتحان الوطني الموحد الذي يحدد نجاحه وحصوله على الباكالوريا'
+      ], 
+      association_id: associationId 
+    }
   ];
 
   const defaultLessons: Omit<Lesson, 'id'>[] = [
