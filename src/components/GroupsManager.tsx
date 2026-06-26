@@ -26,7 +26,6 @@ export const GroupsManager = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [lessonFilter, setLessonFilter] = useState<string>('all');
   const [teacherFilter, setTeacherFilter] = useState<string>('all');
-  const [genderFilter, setGenderFilter] = useState<string>('all');
   const [levelFilter, setLevelFilter] = useState<string>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentGroup, setCurrentGroup] = useState<Partial<Group> | null>(null);
@@ -46,7 +45,7 @@ export const GroupsManager = ({
   }
   const [daySchedules, setDaySchedules] = useState<DaySchedule[]>([]);
 
-  const allDays = ['السبت', 'الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'];
+  const allDays = ['الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت', 'الأحد'];
 
   // تصفية الأفواج
   const filteredGroups = groups.filter(group => {
@@ -54,13 +53,9 @@ export const GroupsManager = ({
                           (group.schedule && group.schedule.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesLesson = lessonFilter === 'all' || group.lesson_id === lessonFilter;
     const matchesTeacher = teacherFilter === 'all' || group.teacher_id === teacherFilter;
-    const matchesGender = genderFilter === 'all' || 
-      (genderFilter === 'male' && group.gender_target === 'male') ||
-      (genderFilter === 'female' && group.gender_target === 'female') ||
-      (genderFilter === 'all_mixed' && group.gender_target === 'all');
     const matchesLevel = levelFilter === 'all' || group.level_id === levelFilter;
 
-    return matchesSearch && matchesLesson && matchesTeacher && matchesGender && matchesLevel;
+    return matchesSearch && matchesLesson && matchesTeacher && matchesLevel;
   });
 
   const handleOpenAddModal = () => {
@@ -75,7 +70,7 @@ export const GroupsManager = ({
       teacher_id: teachers[0]?.id || '',
       lesson_id: lessons[0]?.id || '',
       schedule: '',
-      gender_target: 'female',
+      gender_target: 'all',
       level_id: academicLevels[0]?.id || '',
       specialization: academicLevels[0]?.specializations[0] || 'عام'
     });
@@ -101,8 +96,8 @@ export const GroupsManager = ({
       const timePart = parts[1].trim();
 
       const days = daysPart.split('،').map(d => d.trim());
-      let start = '08:00';
-      let end = '10:00';
+      let start = '19:00';
+      let end = '20:30';
       if (timePart.includes('-')) {
         const times = timePart.split('-');
         start = times[0].trim();
@@ -135,8 +130,8 @@ export const GroupsManager = ({
         } else {
           parsed.push({
             day,
-            startTime: '08:00',
-            endTime: '10:00'
+            startTime: '19:00',
+            endTime: '20:30'
           });
         }
       });
@@ -145,8 +140,8 @@ export const GroupsManager = ({
       const days = allDays.filter(d => scheduleStr.includes(d));
       const timeRegex = /\b\d{2}:\d{2}\b/g;
       const foundTimes = scheduleStr.match(timeRegex);
-      const start = foundTimes && foundTimes[0] ? foundTimes[0] : '08:00';
-      const end = foundTimes && foundTimes[1] ? foundTimes[1] : '10:00';
+      const start = foundTimes && foundTimes[0] ? foundTimes[0] : '19:00';
+      const end = foundTimes && foundTimes[1] ? foundTimes[1] : '20:30';
 
       days.forEach(day => {
         parsed.push({ day, startTime: start, endTime: end });
@@ -180,7 +175,7 @@ export const GroupsManager = ({
     }
 
     // بناء النص للجدول مرتباً بأيام الأسبوع
-    const dayOrder = ['السبت', 'الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'];
+    const dayOrder = ['الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت', 'الأحد'];
     const sortedSchedules = [...daySchedules].sort((a, b) => dayOrder.indexOf(a.day) - dayOrder.indexOf(b.day));
     const scheduleString = sortedSchedules.map(ds => `${ds.day} (${ds.startTime} - ${ds.endTime})`).join('، ');
 
@@ -290,19 +285,7 @@ export const GroupsManager = ({
           </select>
         </div>
 
-        <div className="filter-group">
-          <label className="filter-label">فئة جنس الفوج</label>
-          <select 
-            className="filter-input" 
-            value={genderFilter}
-            onChange={(e) => setGenderFilter(e.target.value)}
-          >
-            <option value="all">الجميع</option>
-            <option value="male">ذكور فقط</option>
-            <option value="female">إناث فقط</option>
-            <option value="all_mixed">مختلط</option>
-          </select>
-        </div>
+
       </div>
 
       {/* عرض الأفواج */}
@@ -319,12 +302,6 @@ export const GroupsManager = ({
                 <div className="card-header">
                   <div>
                     <h3 className="card-title">{group.name}</h3>
-                    <span 
-                      className={`badge ${group.gender_target === 'female' ? 'badge-green' : (group.gender_target === 'male' ? 'badge-blue' : 'badge-purple')}`} 
-                      style={{ marginTop: '6px' }}
-                    >
-                      {group.gender_target === 'female' ? 'فوج إناث' : (group.gender_target === 'male' ? 'فوج ذكور' : 'فوج مختلط')}
-                    </span>
                   </div>
                   <Layers size={24} style={{ color: 'var(--primary-blue)' }} />
                 </div>
@@ -455,35 +432,19 @@ export const GroupsManager = ({
                     />
                   </div>
 
-                  <div className="form-grid two-cols">
-                    <div className="form-group">
-                      <label className="form-label">المادة الدراسية *</label>
-                      <select
-                        className="form-input"
-                        required
-                        value={currentGroup.lesson_id || ''}
-                        onChange={(e) => setCurrentGroup({ ...currentGroup, lesson_id: e.target.value })}
-                      >
-                        <option value="" disabled>اختر المادة</option>
-                        {lessons.map(l => (
-                          <option key={l.id} value={l.id}>{l.name}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="form-group">
-                      <label className="form-label">فئة جنس الفوج المستهدف *</label>
-                      <select
-                        className="form-input"
-                        required
-                        value={currentGroup.gender_target || 'female'}
-                        onChange={(e) => setCurrentGroup({ ...currentGroup, gender_target: e.target.value as any })}
-                      >
-                        <option value="male">ذكور فقط (أستاذ ذكر)</option>
-                        <option value="female">إناث فقط (أستاذة أنثى)</option>
-                        <option value="all">مختلط (أي أستاذ)</option>
-                      </select>
-                    </div>
+                  <div className="form-group">
+                    <label className="form-label">المادة الدراسية *</label>
+                    <select
+                      className="form-input"
+                      required
+                      value={currentGroup.lesson_id || ''}
+                      onChange={(e) => setCurrentGroup({ ...currentGroup, lesson_id: e.target.value })}
+                    >
+                      <option value="" disabled>اختر المادة</option>
+                      {lessons.map(l => (
+                        <option key={l.id} value={l.id}>{l.name}</option>
+                      ))}
+                    </select>
                   </div>
 
                   <div className="form-grid two-cols">
@@ -504,9 +465,16 @@ export const GroupsManager = ({
                         }}
                       >
                         <option value="" disabled>اختر المستوى</option>
-                        {academicLevels.map(lvl => (
-                          <option key={lvl.id} value={lvl.id}>{lvl.name}</option>
-                        ))}
+                        {(() => {
+                          const stageOrder = { high: 1, middle: 2, primary: 3, university: 4, other: 5 } as any;
+                          return [...academicLevels].sort((a, b) => {
+                            const orderA = stageOrder[a.stage] || 99;
+                            const orderB = stageOrder[b.stage] || 99;
+                            return orderA - orderB;
+                          }).map(lvl => (
+                            <option key={lvl.id} value={lvl.id}>{lvl.name}</option>
+                          ));
+                        })()}
                       </select>
                     </div>
 
@@ -565,8 +533,8 @@ export const GroupsManager = ({
                       {allDays.map(day => {
                         const scheduleForDay = daySchedules.find(ds => ds.day === day);
                         const isChecked = !!scheduleForDay;
-                        const currentStart = scheduleForDay?.startTime || '08:00';
-                        const currentEnd = scheduleForDay?.endTime || '10:00';
+                        const currentStart = scheduleForDay?.startTime || '19:00';
+                        const currentEnd = scheduleForDay?.endTime || '20:30';
 
                         return (
                           <div key={day} style={{ 
@@ -592,7 +560,7 @@ export const GroupsManager = ({
                                 checked={isChecked}
                                 onChange={(e) => {
                                   if (e.target.checked) {
-                                    setDaySchedules([...daySchedules, { day, startTime: '08:00', endTime: '10:00' }]);
+                                    setDaySchedules([...daySchedules, { day, startTime: '19:00', endTime: '20:30' }]);
                                   } else {
                                     setDaySchedules(daySchedules.filter(ds => ds.day !== day));
                                   }
