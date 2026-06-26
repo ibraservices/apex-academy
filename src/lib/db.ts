@@ -1080,39 +1080,23 @@ export async function deleteInvoiceItem(id: string): Promise<void> {
 
 export async function initializeDefaultData(associationId: string): Promise<void> {
   const defaultLevels: Omit<AcademicLevel, 'id'>[] = [
-    { 
-      name: 'التعليم الابتدائي', 
-      stage: 'primary', 
-      specializations: [
-        'المستوى الأول ابتدائي', 
-        'المستوى الثاني ابتدائي', 
-        'المستوى الثالث ابتدائي', 
-        'المستوى الرابع ابتدائي', 
-        'المستوى الخامس ابتدائي', 
-        'المستوى السادس ابتدائي (سنة إشهادية)'
-      ], 
-      association_id: associationId 
-    },
-    { 
-      name: 'التعليم الثانوي الإعدادي', 
-      stage: 'middle', 
-      specializations: [
-        'السنة الأولى إعدادي', 
-        'السنة الثانية إعدادي', 
-        'السنة الثالثة إعدادي (سنة إشهادية يتم فيها التوجيه لاختيار التخصص في المرحلة التأهيلية)'
-      ], 
-      association_id: associationId 
-    },
-    { 
-      name: 'التعليم الثانوي التأهيلي', 
-      stage: 'high', 
-      specializations: [
-        'الجذع المشترك: سنة تخصص أولي (يختار فيها التلميذ بين مسالك مثل: الآداب والعلوم الإنسانية، العلوم، التكنولوجيا، التعليم الأصيل)', 
-        'السنة الأولى باكالوريا: يدرس فيها التلميذ مواد تخصصه، ويجتاز في نهايتها الامتحان الجهوي الموحد', 
-        'السنة الثانية باكالوريا: ختام المسار المدرسي، ويجتاز فيها التلميذ الامتحان الوطني الموحد الذي يحدد نجاحه وحصوله على الباكالوريا'
-      ], 
-      association_id: associationId 
-    }
+    // 1. التعليم الابتدائي (Primary Stage)
+    { name: 'المستوى الأول ابتدائي', stage: 'primary', specializations: ['عام'], association_id: associationId },
+    { name: 'المستوى الثاني ابتدائي', stage: 'primary', specializations: ['عام'], association_id: associationId },
+    { name: 'المستوى الثالث ابتدائي', stage: 'primary', specializations: ['عام'], association_id: associationId },
+    { name: 'المستوى الرابع ابتدائي', stage: 'primary', specializations: ['عام'], association_id: associationId },
+    { name: 'المستوى الخامس ابتدائي', stage: 'primary', specializations: ['عام'], association_id: associationId },
+    { name: 'المستوى السادس ابتدائي (سنة إشهادية)', stage: 'primary', specializations: ['عام'], association_id: associationId },
+
+    // 2. التعليم الثانوي الإعدادي (Middle Stage)
+    { name: 'السنة الأولى إعدادي', stage: 'middle', specializations: ['عام'], association_id: associationId },
+    { name: 'السنة الثانية إعدادي', stage: 'middle', specializations: ['عام'], association_id: associationId },
+    { name: 'السنة الثالثة إعدادي (سنة إشهادية)', stage: 'middle', specializations: ['عام'], association_id: associationId },
+
+    // 3. التعليم الثانوي التأهيلي (High Stage)
+    { name: 'الجذع المشترك', stage: 'high', specializations: ['علمي', 'تكنولوجي', 'آداب وعلوم إنسانية', 'التعليم الأصيل'], association_id: associationId },
+    { name: 'السنة الأولى باكالوريا', stage: 'high', specializations: ['علوم تجريبية', 'علوم رياضية', 'علوم تكنولوجية', 'آداب وعلوم إنسانية', 'علوم اقتصادية وتدبير', 'التعليم الأصيل'], association_id: associationId },
+    { name: 'السنة الثانية باكالوريا (الوطني)', stage: 'high', specializations: ['مسلك العلوم الفيزيائية', 'مسلك علوم الحياة والأرض', 'مسلك العلوم الرياضية (أ)', 'مسلك العلوم الرياضية (ب)', 'مسلك الآداب', 'مسلك العلوم الإنسانية', 'مسلك العلوم الاقتصادية', 'مسلك علوم التدبير المحاسباتي'], association_id: associationId }
   ];
 
   const defaultLessons: Omit<Lesson, 'id'>[] = [
