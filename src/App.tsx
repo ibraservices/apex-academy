@@ -406,6 +406,7 @@ export default function App() {
             invoices={invoices}
             invoiceItems={invoiceItems}
             academicLevels={academicLevels}
+            teachers={teachers}
             onSaveStudent={handleSaveStudent}
             onDeleteStudent={handleDeleteStudent}
             onSaveEnrollment={handleSaveEnrollment}

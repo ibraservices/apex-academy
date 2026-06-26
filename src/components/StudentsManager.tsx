@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Plus, Search, Edit2, Trash2, X, Users, User, Phone, Sparkles, AlertTriangle, Printer, MessageCircle, Wallet, FileText, DollarSign } from 'lucide-react';
-import { type Student, type Group, type Lesson, type Enrollment, type Invoice, type InvoiceItem, type AcademicLevel } from '../lib/db';
+import { type Student, type Group, type Lesson, type Enrollment, type Invoice, type InvoiceItem, type AcademicLevel, type Teacher } from '../lib/db';
 
 interface StudentsManagerProps {
   students: Student[];
@@ -10,6 +10,7 @@ interface StudentsManagerProps {
   invoices: Invoice[];
   invoiceItems: InvoiceItem[];
   academicLevels: AcademicLevel[];
+  teachers: Teacher[];
   onSaveStudent: (student: Omit<Student, 'id'> & { id?: string }) => Promise<Student>;
   onDeleteStudent: (id: string) => Promise<void>;
   onSaveEnrollment: (enrollment: Omit<Enrollment, 'id'> & { id?: string }) => Promise<Enrollment>;
@@ -27,6 +28,7 @@ export const StudentsManager = ({
   invoices,
   invoiceItems,
   academicLevels,
+  teachers,
   onSaveStudent,
   onDeleteStudent,
   onSaveEnrollment,
@@ -1527,6 +1529,17 @@ export const StudentsManager = ({
                       <span className="receipt-label">وصلنا من التلميذ(ة):</span>
                       <span className="receipt-value" style={{ fontWeight: 'bold' }}>{student?.name || 'تلميذ محذوف'}</span>
                     </div>
+                    <div className="receipt-row">
+                      <span className="receipt-label">المستوى والتخصص:</span>
+                      <span className="receipt-value">
+                        {(() => {
+                          if (!student) return 'غير محدد';
+                          const lvl = academicLevels.find(l => l.id === student.academic_level);
+                          const specLabel = student.specialization && student.specialization !== 'عام' ? ` - ${student.specialization}` : '';
+                          return lvl ? `${lvl.name}${specLabel}` : (student.academic_level || 'غير محدد');
+                        })()}
+                      </span>
+                    </div>
 
                     <div style={{ marginTop: '16px', marginBottom: '16px' }}>
                       <span className="receipt-label" style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>تفاصيل البنود والخدمات:</span>
@@ -1534,16 +1547,25 @@ export const StudentsManager = ({
                         <thead>
                           <tr style={{ backgroundColor: 'var(--bg-main)', borderBottom: '1px solid var(--border-color)' }}>
                             <th style={{ textAlign: 'right', padding: '8px' }}>الوصف / البيان</th>
+                            <th style={{ textAlign: 'right', padding: '8px' }}>الأستاذ</th>
+                            <th style={{ textAlign: 'right', padding: '8px' }}>التوقيت</th>
                             <th style={{ textAlign: 'left', padding: '8px', width: '100px' }}>المبلغ</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {items.map(item => (
-                            <tr key={item.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                              <td style={{ padding: '8px' }}>{item.description}</td>
-                              <td style={{ padding: '8px', textAlign: 'left', fontWeight: 'bold' }}>{item.amount} د.م.</td>
-                            </tr>
-                          ))}
+                          {items.map(item => {
+                            const enrollment = item.enrollment_id ? enrollments.find(e => e.id === item.enrollment_id) : null;
+                            const group = enrollment ? groups.find(g => g.id === enrollment.group_id) : null;
+                            const teacher = group ? teachers.find(t => t.id === group.teacher_id) : null;
+                            return (
+                              <tr key={item.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                                <td style={{ padding: '8px' }}>{item.description}</td>
+                                <td style={{ padding: '8px' }}>{teacher?.name || '—'}</td>
+                                <td style={{ padding: '8px' }}>{group?.schedule || '—'}</td>
+                                <td style={{ padding: '8px', textAlign: 'left', fontWeight: 'bold' }}>{item.amount} د.م.</td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
@@ -1608,6 +1630,17 @@ export const StudentsManager = ({
                     <span className="receipt-label" style={{ width: '180px', fontWeight: 'bold' }}>وصلنا من التلميذ(ة):</span>
                     <span className="receipt-value" style={{ fontWeight: 'bold' }}>{student?.name || 'تلميذ محذوف'}</span>
                   </div>
+                  <div className="receipt-row" style={{ borderBottom: '1px dashed #000', paddingBottom: '12px' }}>
+                    <span className="receipt-label" style={{ width: '180px', fontWeight: 'bold' }}>المستوى والتخصص:</span>
+                    <span className="receipt-value" style={{ fontWeight: 'bold' }}>
+                      {(() => {
+                        if (!student) return 'غير محدد';
+                        const lvl = academicLevels.find(l => l.id === student.academic_level);
+                        const specLabel = student.specialization && student.specialization !== 'عام' ? ` - ${student.specialization}` : '';
+                        return lvl ? `${lvl.name}${specLabel}` : (student.academic_level || 'غير محدد');
+                      })()}
+                    </span>
+                  </div>
 
                   <div style={{ marginTop: '16px', marginBottom: '16px' }}>
                     <span className="receipt-label" style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>تفاصيل البنود والخدمات:</span>
@@ -1615,16 +1648,25 @@ export const StudentsManager = ({
                       <thead>
                         <tr style={{ backgroundColor: '#f2f2f2', borderBottom: '2px solid #000' }}>
                           <th style={{ textAlign: 'right', padding: '8px', borderLeft: '1px solid #000' }}>الوصف / البيان</th>
+                          <th style={{ textAlign: 'right', padding: '8px', borderLeft: '1px solid #000' }}>الأستاذ</th>
+                          <th style={{ textAlign: 'right', padding: '8px', borderLeft: '1px solid #000' }}>التوقيت</th>
                           <th style={{ textAlign: 'left', padding: '8px', width: '120px' }}>المبلغ</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {items.map(item => (
-                          <tr key={item.id} style={{ borderBottom: '1px solid #000' }}>
-                            <td style={{ padding: '8px', borderLeft: '1px solid #000' }}>{item.description}</td>
-                            <td style={{ padding: '8px', textAlign: 'left', fontWeight: 'bold' }}>{item.amount} د.م.</td>
-                          </tr>
-                        ))}
+                        {items.map(item => {
+                          const enrollment = item.enrollment_id ? enrollments.find(e => e.id === item.enrollment_id) : null;
+                          const group = enrollment ? groups.find(g => g.id === enrollment.group_id) : null;
+                          const teacher = group ? teachers.find(t => t.id === group.teacher_id) : null;
+                          return (
+                            <tr key={item.id} style={{ borderBottom: '1px solid #000' }}>
+                              <td style={{ padding: '8px', borderLeft: '1px solid #000' }}>{item.description}</td>
+                              <td style={{ padding: '8px', borderLeft: '1px solid #000' }}>{teacher?.name || '—'}</td>
+                              <td style={{ padding: '8px', borderLeft: '1px solid #000' }}>{group?.schedule || '—'}</td>
+                              <td style={{ padding: '8px', textAlign: 'left', fontWeight: 'bold' }}>{item.amount} د.م.</td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -1717,8 +1759,31 @@ export const StudentsManager = ({
                       <span className="receipt-value" style={{ fontWeight: 'bold' }}>{activeReceiptStudent.name}</span>
                     </div>
                     <div className="receipt-row">
+                      <span className="receipt-label">المستوى والتخصص:</span>
+                      <span className="receipt-value">
+                        {(() => {
+                          const lvl = academicLevels.find(l => l.id === activeReceiptStudent.academic_level);
+                          const specLabel = activeReceiptStudent.specialization && activeReceiptStudent.specialization !== 'عام' ? ` - ${activeReceiptStudent.specialization}` : '';
+                          return lvl ? `${lvl.name}${specLabel}` : (activeReceiptStudent.academic_level || 'غير محدد');
+                        })()}
+                      </span>
+                    </div>
+                    <div className="receipt-row">
                       <span className="receipt-label">المادة والفوج:</span>
                       <span className="receipt-value">{lesson?.name} - {group?.name}</span>
+                    </div>
+                    <div className="receipt-row">
+                      <span className="receipt-label">الأستاذ(ة):</span>
+                      <span className="receipt-value">
+                        {(() => {
+                          const teacher = group ? teachers.find(t => t.id === group.teacher_id) : null;
+                          return teacher ? teacher.name : 'غير محدد';
+                        })()}
+                      </span>
+                    </div>
+                    <div className="receipt-row">
+                      <span className="receipt-label">توقيت الفوج:</span>
+                      <span className="receipt-value">{group?.schedule || 'غير محدد'}</span>
                     </div>
                     <div className="receipt-row">
                       <span className="receipt-label">فترة الصلاحية:</span>
@@ -1781,8 +1846,31 @@ export const StudentsManager = ({
                     <span className="receipt-value" style={{ fontWeight: 'bold' }}>{activeReceiptStudent.name}</span>
                   </div>
                   <div className="receipt-row" style={{ borderBottom: '1px dashed #000', paddingBottom: '12px' }}>
+                    <span className="receipt-label" style={{ width: '180px', fontWeight: 'bold' }}>المستوى والتخصص:</span>
+                    <span className="receipt-value" style={{ fontWeight: 'bold' }}>
+                      {(() => {
+                        const lvl = academicLevels.find(l => l.id === activeReceiptStudent.academic_level);
+                        const specLabel = activeReceiptStudent.specialization && activeReceiptStudent.specialization !== 'عام' ? ` - ${activeReceiptStudent.specialization}` : '';
+                        return lvl ? `${lvl.name}${specLabel}` : (activeReceiptStudent.academic_level || 'غير محدد');
+                      })()}
+                    </span>
+                  </div>
+                  <div className="receipt-row" style={{ borderBottom: '1px dashed #000', paddingBottom: '12px' }}>
                     <span className="receipt-label" style={{ width: '180px', fontWeight: 'bold' }}>المادة والفوج:</span>
                     <span className="receipt-value">{lesson?.name} - {group?.name}</span>
+                  </div>
+                  <div className="receipt-row" style={{ borderBottom: '1px dashed #000', paddingBottom: '12px' }}>
+                    <span className="receipt-label" style={{ width: '180px', fontWeight: 'bold' }}>الأستاذ(ة):</span>
+                    <span className="receipt-value" style={{ fontWeight: 'bold' }}>
+                      {(() => {
+                        const teacher = group ? teachers.find(t => t.id === group.teacher_id) : null;
+                        return teacher ? teacher.name : 'غير محدد';
+                      })()}
+                    </span>
+                  </div>
+                  <div className="receipt-row" style={{ borderBottom: '1px dashed #000', paddingBottom: '12px' }}>
+                    <span className="receipt-label" style={{ width: '180px', fontWeight: 'bold' }}>توقيت الفوج:</span>
+                    <span className="receipt-value" style={{ fontWeight: 'bold' }}>{group?.schedule || 'غير محدد'}</span>
                   </div>
                   <div className="receipt-row" style={{ borderBottom: '1px dashed #000', paddingBottom: '12px' }}>
                     <span className="receipt-label" style={{ width: '180px', fontWeight: 'bold' }}>فترة الصلاحية:</span>
@@ -1790,7 +1878,7 @@ export const StudentsManager = ({
                   </div>
                   <div className="receipt-row" style={{ borderBottom: '1px dashed #000', paddingBottom: '12px' }}>
                     <span className="receipt-label" style={{ width: '180px', fontWeight: 'bold' }}>حالة الدفع:</span>
-                    <span className="receipt-value">
+                    <span className="receipt-value" style={{ fontWeight: 'bold' }}>
                       {pStatus === 'paid' && 'مدفوع بالكامل'}
                       {pStatus === 'partial' && `دفع جزئي (باقي بذمته: ${unpaid} د.م.)`}
                       {pStatus === 'unpaid' && 'متأخر / غير مدفوع'}
