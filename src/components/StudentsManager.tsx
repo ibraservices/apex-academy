@@ -673,8 +673,8 @@ export const StudentsManager = ({
                               width: '32px', 
                               height: '32px', 
                               borderRadius: '50%', 
-                              backgroundColor: student.gender === 'female' ? '#fdf2f8' : (student.gender === 'male' ? '#eff6ff' : 'var(--primary-blue-light)'),
-                              color: student.gender === 'female' ? '#db2777' : (student.gender === 'male' ? '#2563eb' : 'var(--primary-blue-dark)'),
+                              backgroundColor: 'var(--primary-green-subtle)',
+                              color: 'var(--primary-green-dark)',
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center'
@@ -682,14 +682,6 @@ export const StudentsManager = ({
                               <User size={16} />
                             </div>
                             <span>{student.name}</span>
-                            {student.gender && (
-                              <span 
-                                className={`badge ${student.gender === 'female' ? 'badge-green' : 'badge-blue'}`} 
-                                style={{ fontSize: '0.7rem', padding: '2px 6px', marginRight: '6px' }}
-                              >
-                                {student.gender === 'female' ? 'أنثى' : 'ذكر'}
-                              </span>
-                            )}
                           </div>
                         </td>
 
@@ -1073,36 +1065,16 @@ export const StudentsManager = ({
             <form onSubmit={handleSubmitStudent}>
               <div className="modal-body">
                 <div className="form-grid">
-                  <div className="form-grid two-cols">
-                    <div className="form-group">
-                      <label className="form-label">الاسم الكامل للتلميذ *</label>
-                      <input
-                        type="text"
-                        className="form-input"
-                        required
-                        placeholder="اسم التلميذ الكامل"
-                        value={currentStudent.name || ''}
-                        onChange={(e) => setCurrentStudent({ ...currentStudent, name: e.target.value })}
-                      />
-                    </div>
-
-                    <div className="form-group">
-                      <label className="form-label">جنس التلميذ *</label>
-                      <select
-                        className="form-input"
-                        required
-                        value={currentStudent.gender || 'female'}
-                        onChange={(e) => {
-                          setCurrentStudent({ 
-                            ...currentStudent, 
-                            gender: e.target.value as 'male' | 'female'
-                          });
-                        }}
-                      >
-                        <option value="female">أنثى</option>
-                        <option value="male">ذكر</option>
-                      </select>
-                    </div>
+                  <div className="form-group">
+                    <label className="form-label">الاسم الكامل للتلميذ *</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      required
+                      placeholder="اسم التلميذ الكامل"
+                      value={currentStudent.name || ''}
+                      onChange={(e) => setCurrentStudent({ ...currentStudent, name: e.target.value })}
+                    />
                   </div>
 
                   <div className="form-grid two-cols">
