@@ -523,6 +523,15 @@ export default function App() {
             </li>
             <li>
               <button 
+                className={`sidebar-item-btn ${view === 'levels' ? 'active' : ''}`}
+                onClick={() => setView('levels')}
+              >
+                <Sliders size={20} />
+                <span>المستويات والتخصصات</span>
+              </button>
+            </li>
+            <li>
+              <button 
                 className={`sidebar-item-btn ${view === 'lessons' ? 'active' : ''}`}
                 onClick={() => setView('lessons')}
               >
@@ -555,15 +564,6 @@ export default function App() {
               >
                 <Users size={20} />
                 <span>إدارة التلاميذ</span>
-              </button>
-            </li>
-            <li>
-              <button 
-                className={`sidebar-item-btn ${view === 'levels' ? 'active' : ''}`}
-                onClick={() => setView('levels')}
-              >
-                <Sliders size={20} />
-                <span>المستويات والتخصصات</span>
               </button>
             </li>
             <li>
