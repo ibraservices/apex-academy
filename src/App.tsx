@@ -52,7 +52,8 @@ import {
   deleteInvoiceItem,
   getAcademicLevels,
   saveAcademicLevel,
-  deleteAcademicLevel
+  deleteAcademicLevel,
+  initializeDefaultData
 } from './lib/db';
 import { Dashboard } from './components/Dashboard';
 import { LessonsManager } from './components/LessonsManager';
@@ -323,6 +324,20 @@ export default function App() {
     await loadAllData();
   };
 
+  const handleInitializeDefaultData = async () => {
+    if (!profile?.association_id) return;
+    setLoading(true);
+    try {
+      await initializeDefaultData(profile.association_id);
+      await loadAllData();
+    } catch (error) {
+      console.error('فشلت تهيئة البيانات الافتراضية:', error);
+      alert('حدث خطأ أثناء تهيئة البيانات الافتراضية.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // تبديل العرض بين المكونات لمدير الجمعية
   const renderMainContent = () => {
     if (loading) {
@@ -342,9 +357,11 @@ export default function App() {
             teachers={teachers}
             groups={groups}
             lessons={lessons}
+            academicLevels={academicLevels}
             enrollments={enrollments}
             expenses={expenses}
             setView={setView}
+            onInitDefaultData={handleInitializeDefaultData}
           />
         );
       case 'lessons':

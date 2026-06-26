@@ -1,14 +1,17 @@
-import { Users, GraduationCap, Layers, DollarSign, BookOpen, Activity } from 'lucide-react';
-import { type Lesson, type Teacher, type Group, type Student, type Enrollment, type Expense, calculateTeacherSalary } from '../lib/db';
+import { Users, GraduationCap, Layers, DollarSign, BookOpen, Activity, Sparkles, CheckCircle2, RefreshCw } from 'lucide-react';
+import { useState } from 'react';
+import { type Lesson, type Teacher, type Group, type Student, type Enrollment, type Expense, type AcademicLevel, calculateTeacherSalary } from '../lib/db';
 
 interface DashboardProps {
   students: Student[];
   teachers: Teacher[];
   groups: Group[];
   lessons: Lesson[];
+  academicLevels: AcademicLevel[];
   enrollments: Enrollment[];
   expenses: Expense[];
   setView: (view: string) => void;
+  onInitDefaultData: () => Promise<void>;
 }
 
 export const Dashboard = ({
@@ -16,10 +19,13 @@ export const Dashboard = ({
   teachers,
   groups,
   lessons,
+  academicLevels,
   enrollments,
   expenses,
-  setView
+  setView,
+  onInitDefaultData
 }: DashboardProps) => {
+  const [initLoading, setInitLoading] = useState(false);
   // حساب الإحصائيات
   const totalStudents = students.length;
   const totalTeachers = teachers.length;
@@ -100,6 +106,128 @@ export const Dashboard = ({
           الوضع التجريبي نشط
         </div>
       </div>
+
+      {/* بطاقة الترحيب والتهيئة التلقائية لأول مرة */}
+      {lessons.length === 0 && academicLevels.length === 0 && (
+        <div className="onboarding-setup-card card" style={{
+          background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+          color: '#ffffff',
+          borderRadius: '16px',
+          padding: '24px 32px',
+          boxShadow: '0 10px 25px -5px rgba(16, 185, 129, 0.3)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '16px',
+          position: 'relative',
+          overflow: 'hidden',
+          marginBottom: '32px',
+          border: 'none',
+          transition: 'all 0.3s ease'
+        }}>
+          {/* Subtle background decoration */}
+          <div style={{
+            position: 'absolute',
+            top: '-20px',
+            left: '-20px',
+            width: '120px',
+            height: '120px',
+            borderRadius: '50%',
+            background: 'rgba(255, 255, 255, 0.08)',
+            pointerEvents: 'none'
+          }} />
+          <div style={{
+            position: 'absolute',
+            bottom: '-40px',
+            right: '-10px',
+            width: '180px',
+            height: '180px',
+            borderRadius: '50%',
+            background: 'rgba(255, 255, 255, 0.05)',
+            pointerEvents: 'none'
+          }} />
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{
+              background: 'rgba(255, 255, 255, 0.2)',
+              borderRadius: '12px',
+              padding: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <Sparkles size={28} />
+            </div>
+            <div>
+              <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: '800', letterSpacing: '-0.5px' }}>مرحباً بك في أكاديمية أيبكس!</h3>
+              <p style={{ margin: '4px 0 0 0', opacity: 0.9, fontSize: '0.95rem' }}>مساعد التهيئة السريعة لقاعدة البيانات الجديدة</p>
+            </div>
+          </div>
+
+          <p style={{ margin: 0, fontSize: '1.05rem', lineHeight: '1.7', opacity: 0.95, maxWidth: '800px' }}>
+            يبدو أن هذه هي المرة الأولى لتشغيل الأكاديمية وقاعدة البيانات فارغة تماماً. لمساعدتك في إعداد المنصة بسرعة وبدء العمل، نقترح تعبئة الجداول تلقائياً بـ **المستويات الدراسية المعتمدة** (الابتدائي، المتوسط، والثانوي بكافة تخصصاته وشعبه) بالإضافة إلى **المواد الأساسية** (الرياضيات، الفيزياء، العلوم، اللغات، الفلسفة) بضغطة زر واحدة دون الحاجة لكتابتها يدوياً.
+          </p>
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginTop: '8px', alignItems: 'center' }}>
+            <button
+              onClick={async () => {
+                setInitLoading(true);
+                try {
+                  await onInitDefaultData();
+                } catch (err) {
+                  console.error(err);
+                } finally {
+                  setInitLoading(false);
+                }
+              }}
+              disabled={initLoading}
+              style={{
+                background: '#ffffff',
+                color: '#065f46',
+                border: 'none',
+                borderRadius: '10px',
+                padding: '12px 24px',
+                fontSize: '1rem',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+                transition: 'all 0.2s ease',
+              }}
+            >
+              {initLoading ? (
+                <>
+                  <RefreshCw size={18} className="spin-animation" style={{ animation: 'spin 1s linear infinite' }} />
+                  <span>جاري تهيئة وتعبئة قاعدة البيانات...</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 size={18} />
+                  <span>تعبئة قاعدة البيانات تلقائياً بالبيانات المعتمدة</span>
+                </>
+              )}
+            </button>
+
+            <button
+              onClick={() => setView('levels')}
+              style={{
+                background: 'rgba(255, 255, 255, 0.15)',
+                color: '#ffffff',
+                border: '1px solid rgba(255, 255, 255, 0.3)',
+                borderRadius: '10px',
+                padding: '12px 20px',
+                fontSize: '1rem',
+                fontWeight: '500',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+              }}
+            >
+              سأقوم بتهيئة البيانات يدوياً
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* كروت الأرقام السريعة */}
       <div className="stats-grid">

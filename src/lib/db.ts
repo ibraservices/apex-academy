@@ -1077,3 +1077,32 @@ export async function deleteInvoiceItem(id: string): Promise<void> {
     setLocalData('quran_invoice_items', items.filter(ii => ii.id !== id));
   }
 }
+
+export async function initializeDefaultData(associationId: string): Promise<void> {
+  const defaultLevels: Omit<AcademicLevel, 'id'>[] = [
+    { name: 'الطور الابتدائي', stage: 'primary', specializations: ['عام'], association_id: associationId },
+    { name: 'الطور المتوسط', stage: 'middle', specializations: ['عام'], association_id: associationId },
+    { name: 'الأولى ثانوي', stage: 'high', specializations: ['جذع مشترك علوم وتكنولوجيا', 'جذع مشترك آداب'], association_id: associationId },
+    { name: 'الثانية ثانوي', stage: 'high', specializations: ['علوم تجريبية', 'رياضيات', 'تقني رياضي', 'تسيير واقتصاد', 'آداب وفلسفة', 'لغات أجنبية'], association_id: associationId },
+    { name: 'الثالثة ثانوي (بكالوريا)', stage: 'high', specializations: ['علوم تجريبية', 'رياضيات', 'تقني رياضي', 'تسيير واقتصاد', 'آداب وفلسفة', 'لغات أجنبية'], association_id: associationId }
+  ];
+
+  const defaultLessons: Omit<Lesson, 'id'>[] = [
+    { name: 'مادة الرياضيات', description: 'دروس دعم وتقوية وتمارين نموذجية في مادة الرياضيات.', association_id: associationId },
+    { name: 'العلوم الفيزيائية', description: 'دروس دعم وتمارين تفاعلية وحل مواضيع في العلوم الفيزيائية والكيمياء.', association_id: associationId },
+    { name: 'علوم الطبيعة والحياة', description: 'دروس وتمارين نموذجية ومنهجية الإجابة لعلوم الطبيعة والحياة.', association_id: associationId },
+    { name: 'اللغة الإنجليزية', description: 'دروس تقوية لجميع المستويات في قواعد ومفردات اللغة الإنجليزية.', association_id: associationId },
+    { name: 'اللغة الفرنسية', description: 'دروس دعم ومراجعة في اللغة الفرنسية للتلاميذ.', association_id: associationId },
+    { name: 'اللغة العربية', description: 'دروس دعم مراجعة القواعد والتحضير للامتحانات في مادة الأدب العربي.', association_id: associationId },
+    { name: 'فلسفة', description: 'دروس تبسيط المقالات والمنهجية الفلسفية لأقسام الثانوي وبكالوريا.', association_id: associationId }
+  ];
+
+  for (const lvl of defaultLevels) {
+    await saveAcademicLevel(lvl);
+  }
+
+  for (const lsn of defaultLessons) {
+    await saveLesson(lsn);
+  }
+}
+
