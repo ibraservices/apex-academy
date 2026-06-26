@@ -1080,21 +1080,23 @@ export async function deleteInvoiceItem(id: string): Promise<void> {
 
 export async function initializeDefaultData(associationId: string): Promise<void> {
   const defaultLevels: Omit<AcademicLevel, 'id'>[] = [
-    { name: 'الطور الابتدائي', stage: 'primary', specializations: ['عام'], association_id: associationId },
-    { name: 'الطور المتوسط', stage: 'middle', specializations: ['عام'], association_id: associationId },
-    { name: 'الأولى ثانوي', stage: 'high', specializations: ['جذع مشترك علوم وتكنولوجيا', 'جذع مشترك آداب'], association_id: associationId },
-    { name: 'الثانية ثانوي', stage: 'high', specializations: ['علوم تجريبية', 'رياضيات', 'تقني رياضي', 'تسيير واقتصاد', 'آداب وفلسفة', 'لغات أجنبية'], association_id: associationId },
-    { name: 'الثالثة ثانوي (بكالوريا)', stage: 'high', specializations: ['علوم تجريبية', 'رياضيات', 'تقني رياضي', 'تسيير واقتصاد', 'آداب وفلسفة', 'لغات أجنبية'], association_id: associationId }
+    { name: 'التعليم الابتدائي', stage: 'primary', specializations: ['الأول ابتدائي', 'الثاني ابتدائي', 'الثالث ابتدائي', 'الرابع ابتدائي', 'الخامس ابتدائي', 'السادس ابتدائي'], association_id: associationId },
+    { name: 'التعليم الثانوي الإعدادي', stage: 'middle', specializations: ['الأولى إعدادي', 'الثانية إعدادي', 'الثالثة إعدادي'], association_id: associationId },
+    { name: 'الجذع المشترك', stage: 'high', specializations: ['جذع مشترك علمي', 'جذع مشترك تكنولوجي', 'جذع مشترك آداب وعلوم إنسانية', 'جذع مشترك التعليم الأصيل'], association_id: associationId },
+    { name: 'الأولى بكالوريا', stage: 'high', specializations: ['علوم تجريبية', 'علوم رياضية', 'علوم تكنولوجية', 'آداب وعلوم إنسانية', 'علوم اقتصادية وتدبير', 'التعليم الأصيل'], association_id: associationId },
+    { name: 'الثانية بكالوريا (الوطني)', stage: 'high', specializations: ['مسلك العلوم الفيزيائية', 'مسلك علوم الحياة والأرض', 'مسلك العلوم الرياضية (أ)', 'مسلك العلوم الرياضية (ب)', 'مسلك الآداب', 'مسلك العلوم الإنسانية', 'مسلك العلوم الاقتصادية', 'مسلك علوم التدبير المحاسباتي'], association_id: associationId }
   ];
 
   const defaultLessons: Omit<Lesson, 'id'>[] = [
-    { name: 'مادة الرياضيات', description: 'دروس دعم وتقوية وتمارين نموذجية في مادة الرياضيات.', association_id: associationId },
-    { name: 'العلوم الفيزيائية', description: 'دروس دعم وتمارين تفاعلية وحل مواضيع في العلوم الفيزيائية والكيمياء.', association_id: associationId },
-    { name: 'علوم الطبيعة والحياة', description: 'دروس وتمارين نموذجية ومنهجية الإجابة لعلوم الطبيعة والحياة.', association_id: associationId },
-    { name: 'اللغة الإنجليزية', description: 'دروس تقوية لجميع المستويات في قواعد ومفردات اللغة الإنجليزية.', association_id: associationId },
-    { name: 'اللغة الفرنسية', description: 'دروس دعم ومراجعة في اللغة الفرنسية للتلاميذ.', association_id: associationId },
-    { name: 'اللغة العربية', description: 'دروس دعم مراجعة القواعد والتحضير للامتحانات في مادة الأدب العربي.', association_id: associationId },
-    { name: 'فلسفة', description: 'دروس تبسيط المقالات والمنهجية الفلسفية لأقسام الثانوي وبكالوريا.', association_id: associationId }
+    { name: 'الرياضيات', description: 'دروس دعم وتقوية وتمارين نموذجية وحل امتحانات في مادة الرياضيات.', association_id: associationId },
+    { name: 'العلوم الفيزيائية والكيمياء', description: 'دروس وتمارين تطبيقية وحل نماذج الامتحانات في الفيزياء والكيمياء.', association_id: associationId },
+    { name: 'علوم الحياة والأرض (SVT)', description: 'شرح مبسط ومفصل لوحدات الجيولوجيا وعلم الأحياء مع تمارين منهجية.', association_id: associationId },
+    { name: 'اللغة الفرنسية', description: 'التحضير للامتحان الجهوي ودعم قواعد اللغة الفرنسية ودراسة الروايات (Oeuvres).', association_id: associationId },
+    { name: 'اللغة الإنجليزية', description: 'تقوية المهارات اللغوية، القواعد، والكتابة باللغة الإنجليزية.', association_id: associationId },
+    { name: 'الفلسفة', description: 'منهجية تحليل القول والسؤال والنص الفلسفي والتحضير للبكالوريا.', association_id: associationId },
+    { name: 'اللغة العربية', description: 'مراجعة المكونات اللغوية وتحليل النصوص الأدبية والتحضير للامتحانات.', association_id: associationId },
+    { name: 'التربية الإسلامية', description: 'شرح ومراجعة شاملة لدروس التربية الإسلامية المقررة في الامتحانات.', association_id: associationId },
+    { name: 'الاجتماعيات (التاريخ والجغرافيا)', description: 'تلخيص وحفظ المخططات التاريخية والجغرافية ودعم المهارات المنهجية.', association_id: associationId }
   ];
 
   for (const lvl of defaultLevels) {
